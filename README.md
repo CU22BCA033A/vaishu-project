@@ -86,7 +86,7 @@ vaishu-project/
 ├── validation/
 │   ├── validate_gse5281.py   # independent test of the panel
 │   └── results/              # its output (summary + the 23 samples)
-└── docs/                     # screenshots for this README
+└── docs/                     # screenshots + Project_Report.pdf (explains the whole project)
 ```
 
 `analysis.py` does not import Flask, so the science can be tested on its own.
