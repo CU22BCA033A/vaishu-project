@@ -1,6 +1,6 @@
 # Hippocampus gene panel
 
-A course project for *Python for Beginners*. It is a small website written in **Python (Flask)**, **HTML**, **CSS** and a little **JavaScript**.
+A small website written in **Python (Flask)**, **HTML**, **CSS** and a little **JavaScript**.
 
 You upload gene-expression data from hippocampus tissue. The site picks out 7 genes that differed between Alzheimer's and control brains in the GSE48350 dataset and gives each sample a score: positive leans toward the Alzheimer's group, negative toward the control group.
 
@@ -123,12 +123,12 @@ CSV, TSV and semicolon-separated files work. Values should be log2.
 
 | Gene | In Alzheimer's (GSE48350) | Control mean (log2) | Control SD |
 |---|---|---|---|
-| ANKIB1 | higher | 0.423 | 0.525 |
-| RAE1 | lower | 2.587 | 0.486 |
-| SLC25A46 | higher | -0.327 | 0.589 |
-| LINC03007 | lower | -0.254 | 0.238 |
-| ZNF621 | higher | 0.497 | 0.587 |
-| ONECUT3 | higher | 0.040 | 0.162 |
-| LINC02987 | lower | 1.214 | 0.414 |
+| ANKIB1 | higher | 0.421 | 0.464 |
+| RAE1 | lower | 2.592 | 0.429 |
+| SLC25A46 | higher | -0.312 | 0.564 |
+| LINC03007 | lower | -0.245 | 0.225 |
+| ZNF621 | higher | 0.492 | 0.531 |
+| ONECUT3 | higher | 0.044 | 0.145 |
+| LINC02987 | lower | 1.201 | 0.371 |
 
 Means and SDs come from the 18 control samples of the cleaned GSE48350 hippocampus data (highest-expressed probe per gene).
