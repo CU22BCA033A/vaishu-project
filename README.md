@@ -19,7 +19,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open **http://127.0.0.1:5000**. Click the links under the intro to try the built-in data without uploading anything.
+Open **http://127.0.0.1:5000**. Use the links next to the **Analyze samples** button to try the built-in data without uploading anything.
 
 Run the tests:
 
@@ -95,7 +95,7 @@ vaishu-project/
 
 - Light and dark mode (follows the computer's setting; the Light / Dark switch in the header remembers your choice).
 - Colours carry meaning everywhere: **coral** = toward Alzheimer's, **teal** = toward control, **amber** = cutoff and highlights.
-- All charts (heatmaps, ROC curve, score strip, gene bars) are drawn from the real numbers with plain SVG and CSS, with no chart library.
+- All charts (heatmap table, ROC curve, score strip, gene bars) are drawn from the real numbers with plain SVG and CSS, with no chart library.
 - Fonts: Fraunces (headings), IBM Plex Sans and IBM Plex Mono (text and numbers), from Google Fonts.
 - Works on phones: the layout switches to one column below 720 px.
 

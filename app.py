@@ -56,8 +56,6 @@ def show_form(error=None, form=None):
         panel=analysis.parse_panel(analysis.default_panel_text()),
         default_cutoff=analysis.DEFAULT_CUTOFF,
         min_batch=analysis.MIN_BATCH_SIZE,
-        validation=analysis.load_validation(),
-        heatmap=analysis.hero_heatmap(),
     )
 
 

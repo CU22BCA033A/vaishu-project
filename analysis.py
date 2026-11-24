@@ -765,35 +765,6 @@ def heat_style(value, limit=2.5):
     return "background: color-mix(in srgb, var(%s) %d%%, var(--cell)); color: %s;" % (colour, percent, text)
 
 
-def hero_heatmap():
-    """
-    Real data for the picture on the home page: the 7 panel genes across
-    the 23 GSE5281 samples (controls first, then Alzheimer's).
-    Each cell is sign * z, compared with the batch average.
-    Returns None if the validation file is missing.
-    """
-    if not os.path.exists(VALIDATION_BATCH):
-        return None
-    panel = parse_panel(default_panel_text())
-    samples = parse_expression(read_file_text(VALIDATION_BATCH), panel)
-    centers = batch_centers(panel, samples)
-
-    columns = []
-    for sample in samples:
-        result = score_sample(sample, panel, centers)
-        columns.append({
-            "name": sample["name"],
-            "label": group_label(sample["group"]),
-            "cells": [g["contribution"] for g in result["genes"]],
-        })
-    columns.sort(key=lambda c: c["label"])
-    return {
-        "genes": [p["gene"] for p in panel],
-        "columns": columns,
-        "n_ctl": len([c for c in columns if c["label"] == 0]),
-    }
-
-
 def validation_roc():
     """ROC curve of the GSE5281 validation, read from its scores file."""
     path = os.path.join(VALIDATION_FOLDER, "gse5281_scores.csv")

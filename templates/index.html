@@ -1,57 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Analyze{% endblock %}
 
-{% block hero %}
-<section class="hero">
-  <div class="container">
-    <div>
-      <span class="label">Hippocampus · 7 genes · GSE48350</span>
-      <h1>Does a sample look more like <em>Alzheimer’s</em> or control?</h1>
-      <p class="lead">Upload gene-expression data from hippocampus tissue. The site picks out 7 genes that differed between Alzheimer’s and control brains in one study and scores each sample against them. It also checks whether that difference holds up in your data.</p>
-      <div class="hero-actions">
-        <a href="#analyze" class="btn btn-gold">Upload data</a>
-        <a href="{{ url_for('example_gse5281') }}" class="btn btn-ghost-light">Try 23 real samples</a>
-      </div>
-    </div>
-
-    {% if heatmap %}
-    <figure class="figure" style="margin:0">
-      <div class="heat-hero" role="img" aria-label="Heatmap of the 7 panel genes across 23 GSE5281 hippocampus samples">
-        {% for gene in heatmap.genes %}
-        {% set gi = loop.index0 %}
-        <span class="gene">{{ gene }}</span>
-        <div class="row">
-          {% for col in heatmap.columns %}
-            {% if loop.index0 == heatmap.n_ctl %}<span class="gap"></span>{% endif %}
-            <span class="hero-cell" style="{{ col.cells[gi]|heat(1.8) }}" title="{{ col.name }} · {{ gene }}: {{ '%+.2f'|format(col.cells[gi]) }}"></span>
-          {% endfor %}
-        </div>
-        {% endfor %}
-        <span></span>
-        <div class="groups" style="grid-template-columns: {{ heatmap.n_ctl }}fr 1fr {{ heatmap.columns|length - heatmap.n_ctl }}fr">
-          <span style="border-color: var(--ctl)">{{ heatmap.n_ctl }} controls</span>
-          <span></span>
-          <span style="border-color: var(--ad)">{{ heatmap.columns|length - heatmap.n_ctl }} Alzheimer’s</span>
-        </div>
-      </div>
-      <div class="legend-bar"><span>toward control</span><i></i><span>toward Alzheimer’s</span></div>
-      <figcaption class="figure-caption"><strong>Real data, GSE5281.</strong> Each cell is one panel gene in one sample. If the panel worked, the right block would be mostly coral and the left block mostly teal. It isn’t, which is what the <a href="{{ url_for('validation') }}" style="color:inherit">validation</a> found.</figcaption>
-    </figure>
-    {% endif %}
-  </div>
-</section>
-{% endblock %}
 
 {% block content %}
-{% if validation %}
-<div class="callout callout-result">
-  <span class="icon">!</span>
-  <div>
-    <p><strong>Independent check: the panel did not hold up.</strong> On {{ validation.n_control + validation.n_alzheimers }} hippocampus samples from a second study (GSE5281) it separated Alzheimer’s from controls no better than chance (AUC {{ "%.2f"|format(validation.auc) }}, where 0.5 is a coin flip). <a href="{{ url_for('validation') }}">Read the validation →</a></p>
-  </div>
-</div>
-{% endif %}
-
 {% if error %}
 <div class="callout callout-error" role="alert">
   <span class="icon">×</span>

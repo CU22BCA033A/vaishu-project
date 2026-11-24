@@ -23,7 +23,7 @@
   --line: #e2ddd2;
   --line-strong: #cfc8ba;
 
-  --navy: #13203a;        /* header and hero band */
+  --navy: #13203a;        /* header and footer */
   --navy-2: #1c2d4f;
   --on-navy: #eef1f7;
   --on-navy-muted: #a9b4cb;
@@ -118,31 +118,6 @@ code { font-size: .86em; background: var(--surface-2); border: 1px solid var(--l
 .theme-switch button[aria-pressed="true"] { background: var(--gold); color: #13203a; }
 
 
-/* ---------- Hero band (home page) ---------- */
-.hero { background: var(--navy); color: var(--on-navy); padding: 48px 0 56px; }
-.hero .container { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; }
-.hero h1 { color: var(--on-navy); }
-.hero h1 em { font-style: italic; color: var(--gold); }
-.hero .lead { color: var(--on-navy-muted); font-size: 1.08rem; max-width: 52ch; }
-.hero .label { color: var(--gold); margin-bottom: 14px; }
-.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px; }
-
-.figure { background: var(--navy-2); border: 1px solid rgba(255, 255, 255, .08); border-radius: var(--radius); padding: 18px 18px 14px; }
-.figure-caption { color: var(--on-navy-muted); font-size: .8rem; margin: 12px 0 0; line-height: 1.5; }
-.figure-caption strong { color: var(--on-navy); font-weight: 500; }
-
-.heat-hero { display: grid; grid-template-columns: 82px 1fr; gap: 6px 10px; align-items: center; }
-.heat-hero .gene { font-family: "IBM Plex Mono", monospace; font-size: .7rem; color: var(--on-navy-muted); text-align: right; }
-.heat-hero .row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; }
-.heat-hero .row span { height: 18px; border-radius: 2px; }
-.heat-hero .row .gap { background: transparent !important; }
-.heat-hero .groups { display: grid; gap: 2px; font-size: .7rem; color: var(--on-navy-muted); }
-.heat-hero .groups span { border-top: 2px solid; padding-top: 3px; }
-.heat-hero .hero-cell { --cell: #24365c; }
-.legend-bar { display: flex; align-items: center; gap: 8px; font-size: .72rem; color: var(--on-navy-muted); margin-top: 12px; }
-.legend-bar i { display: block; width: 110px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--ctl), #24365c, var(--ad)); }
-
-
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -155,8 +130,6 @@ code { font-size: .86em; background: var(--surface-2); border: 1px solid var(--l
 .btn-ink:hover { background: var(--ink-2); }
 .btn-line { background: transparent; color: var(--ink); border-color: var(--line-strong); }
 .btn-line:hover { border-color: var(--ink); }
-.btn-ghost-light { background: transparent; color: var(--on-navy); border-color: rgba(255, 255, 255, .25); }
-.btn-ghost-light:hover { border-color: var(--on-navy); }
 .btn[disabled] { opacity: .65; cursor: progress; }
 
 
@@ -165,6 +138,7 @@ main { padding: 40px 0 72px; }
 .page-head { padding: 40px 0 32px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .page-head .lead { color: var(--ink-2); max-width: 66ch; font-size: 1.05rem; margin: 0; }
 .page-head .label { margin-bottom: 10px; color: var(--gold-text); }
+.head-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px; }
 
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin: 0 0 24px; }
 .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -390,13 +364,12 @@ pre { margin: 0 0 10px; padding: 12px 14px; overflow-x: auto; font-size: .8rem; 
 
 /* ---------- Smaller screens ---------- */
 @media (max-width: 960px) {
-  .hero .container, .grid-side { grid-template-columns: 1fr; }
+  .grid-side { grid-template-columns: 1fr; }
   .sticky { position: static; }
   .stats { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 720px) {
   .container { padding: 0 16px; }
-  .hero { padding: 32px 0 36px; }
   .grid-2, .reasons, .site-footer .container { grid-template-columns: 1fr; }
   .choices { grid-template-columns: 1fr; }
   .panel { padding: 18px; }
@@ -408,8 +381,6 @@ pre { margin: 0 0 10px; padding: 12px 14px; overflow-x: auto; font-size: .8rem; 
   .bar-row { grid-template-columns: 1fr 50px; }
   .bar-name { grid-column: 1 / -1; }
   .bar-name .small { display: inline; margin-left: 6px; }
-  .heat-hero { grid-template-columns: 70px 1fr; }
-  .heat-hero .row span { height: 14px; }
   .method-step { grid-template-columns: 1fr; gap: 6px; }
   .diff { width: 100px; }
 }

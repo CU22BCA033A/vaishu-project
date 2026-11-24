@@ -12,7 +12,7 @@
       {% else %}Each gene was compared with the 18 GSE48350 control brains.{% endif %}
       Cutoff <strong>{{ "%.2f"|format(report.cutoff) }}</strong>: {{ cutoff_source }}.
     </p>
-    <div class="hero-actions">
+    <div class="head-actions">
       <a class="btn btn-ink" href="{{ url_for('index') }}#analyze">New analysis</a>
       <button type="button" class="btn btn-line" id="downloadBtn">Download CSV</button>
     </div>
