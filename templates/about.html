@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}How it works{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <div>
+    <span class="eyebrow">How it works</span>
+    <h1>From a big expression table to one number</h1>
+    <p class="muted">The scoring itself is one short Python function, <code>score_sample()</code> in <code>analysis.py</code>.</p>
+  </div>
+</section>
+
+<section class="how-grid">
+  <div class="card how">
+    <span class="how-num">1</span>
+    <h3>Find the panel genes</h3>
+    <p>Your file can hold 20,000 genes. The site keeps only the 7 panel genes. If a gene has several probes, the one with the highest average is used.</p>
+  </div>
+  <div class="card how">
+    <span class="how-num">2</span>
+    <h3>Compare with controls</h3>
+    <p>Each gene gets a z-score: how many standard deviations it is away from the average of 18 healthy control brains.</p>
+    <code class="formula">z = (value − control_mean) / control_sd</code>
+  </div>
+  <div class="card how">
+    <span class="how-num">3</span>
+    <h3>Point in the right direction</h3>
+    <p>Some genes go up in Alzheimer’s and some go down. Multiplying by the sign makes “toward Alzheimer’s” always positive.</p>
+    <code class="formula">contribution = sign × z</code>
+  </div>
+  <div class="card how">
+    <span class="how-num">4</span>
+    <h3>Average and compare</h3>
+    <p>The panel score is the average contribution. Above the cutoff ({{ default_cutoff }} by default) the sample looks Alzheimer’s-like.</p>
+    <code class="formula">score = mean(contributions)</code>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>The 7-gene panel</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Gene</th><th>In Alzheimer’s group</th><th class="num">Control mean (log2)</th><th class="num">Control SD</th></tr>
+      </thead>
+      <tbody>
+        {% for p in panel %}
+        <tr>
+          <td class="mono strong">{{ p.gene }}</td>
+          <td>{% if p.sign > 0 %}<span class="badge badge-ad">▲ higher</span>{% else %}<span class="badge badge-ctl">▼ lower</span>{% endif %}</td>
+          <td class="num mono">{{ "%.3f"|format(p.mean) }}</td>
+          <td class="num mono">{{ "%.3f"|format(p.sd) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small">Source: cleaned GSE48350 hippocampus data, 18 control samples. <a href="{{ url_for('static', filename='data/panel_reference.csv') }}" download>Download panel_reference.csv</a></p>
+</section>
+
+<section class="card limits">
+  <h2>Limitations, in plain words</h2>
+  <ul>
+    <li><strong>Small dataset.</strong> The panel was found in only 37 post-mortem hippocampus samples (18 control, 19 Alzheimer’s).</li>
+    <li><strong>Batch overlap.</strong> In that dataset disease and processing batch overlap, so some of the signal may come from how samples were processed.</li>
+    <li><strong>Not validated.</strong> The panel has not been tested on independent data, so accuracy on new samples is unknown.</li>
+    <li><strong>Same scale needed.</strong> Your values must be log2 and normalized like the reference. Otherwise the z-scores are meaningless (the site flags this as “scale looks off”).</li>
+    <li><strong>Not a diagnosis.</strong> The output says which group a sample resembles in this one dataset. Alzheimer’s disease is diagnosed by doctors using clinical tests.</li>
+  </ul>
+</section>
+{% endblock %}
