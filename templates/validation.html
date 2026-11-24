@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Validation{% endblock %}
+
+{% block content %}
+<h1>Does the panel work on new data?</h1>
+
+{% if not v %}
+<div class="note"><p>The validation has not been run yet. Run <code>python validation/validate_gse5281.py</code> and reload this page.</p></div>
+{% else %}
+
+<p class="lead">The 7 genes were chosen using GSE48350. Measuring accuracy on those same samples is too optimistic, because the genes were picked to fit them. So we tested the panel on a dataset it had never seen: <strong>GSE5281</strong>, from a different study and lab.</p>
+
+<div class="verdict">
+  <div class="big-number">AUC {{ "%.2f"|format(v.auc) }}</div>
+  <p><strong>The panel did not hold up.</strong> On {{ v.n_control }} control and {{ v.n_alzheimers }} Alzheimer’s hippocampus samples it did no better than chance. Alzheimer’s samples actually tended to score <em>lower</em> than controls. Only {{ v.genes_in_expected_direction }} of 7 genes moved in the expected direction.</p>
+</div>
+
+<p><a class="btn plain" href="{{ url_for('example_gse5281') }}">Open these 23 samples in the analyzer</a></p>
+
+<h2>Numbers</h2>
+<table class="kv">
+  <tr><th>Samples</th><td>{{ v.n_control }} control, {{ v.n_alzheimers }} Alzheimer’s (hippocampus)</td></tr>
+  <tr><th>AUC</th><td>{{ "%.2f"|format(v.auc) }} (95% bootstrap interval {{ "%.2f"|format(v.auc_ci95[0]) }}–{{ "%.2f"|format(v.auc_ci95[1]) }})</td></tr>
+  <tr><th>Permutation test</th><td>p = {{ "%.2f"|format(v.permutation_p) }}. Random labels did at least as well {{ "%.0f"|format(v.permutation_p * 100) }}% of the time</td></tr>
+  <tr><th>Accuracy (score &gt; 0)</th><td>{{ v.correct }} of {{ v.total }} ({{ "%.0f"|format(v.accuracy * 100) }}%)</td></tr>
+  <tr><th>Sensitivity / specificity</th><td>{{ "%.0f"|format(v.sensitivity * 100) }}% / {{ "%.0f"|format(v.specificity * 100) }}%</td></tr>
+</table>
+
+<h3>Each gene</h3>
+<div class="table-scroll">
+<table>
+  <tr><th>Gene</th><th>Probe</th><th>Expected in AD</th><th>Seen in GSE5281</th><th class="num">AD − control (log2)</th><th class="num">Gene AUC</th></tr>
+  {% for g in v.genes %}
+  <tr>
+    <td class="mono">{{ g.gene }}</td>
+    <td class="mono small">{{ g.probe }}</td>
+    <td>{{ g.expected }}</td>
+    <td class="{{ 'yes' if g.agrees else 'no' }}">{{ g.observed }} {{ '✓' if g.agrees else '✗' }}</td>
+    <td class="num mono">{{ "%+.3f"|format(g.ad_minus_control_log2) }}</td>
+    <td class="num mono">{{ "%.2f"|format(g.auc_in_expected_direction) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="small muted">Gene AUC: how well that single gene separates the groups in the expected direction (0.5 = chance).</p>
+
+<h3>Does the probe choice matter?</h3>
+<p>Most genes have several probes on the chip. The main result uses the rule fixed in advance (highest-expressed probe). Other choices give:</p>
+<table>
+  {% for rule, value in v.probe_choice_check_auc.items() %}
+  <tr><td>{{ rule }}</td><td class="num mono">AUC {{ "%.2f"|format(value) }}</td></tr>
+  {% endfor %}
+</table>
+<p>None of them separates the groups, so the conclusion does not depend on this choice.</p>
+
+<h2>How the test was done</h2>
+<ol class="steps">
+  <li>Downloaded the GSE5281 series matrix from NCBI GEO and kept the hippocampus samples.</li>
+  <li>Found the probes for each gene on the Affymetrix HG-U133 Plus 2.0 chip. LINC03007 and LINC02987 have newer names than the chip annotation, so they were matched by NCBI Gene ID (646588 and 101927151).</li>
+  <li>Turned the MAS5 values into log2 and standardised each gene within the dataset. The GSE48350 means could not be reused because the data is on a different scale.</li>
+  <li>Computed the panel score for every sample <em>without</em> looking at the labels, then compared scores and labels.</li>
+  <li>Nothing about the panel (genes, directions, scoring) was changed after seeing the results.</li>
+</ol>
+<p>The script is <code>validation/validate_gse5281.py</code> in the repository and runs in about a second after the 36 MB download.</p>
+
+<h2>What could explain it</h2>
+<ul>
+  <li><strong>Overfitting.</strong> The panel was chosen from about 20,000 genes using only 37 samples. With that many genes, some will separate a small dataset by chance.</li>
+  <li><strong>Batch effects.</strong> In GSE48350, disease status and processing batch overlap, so some “Alzheimer’s” genes may really be batch genes.</li>
+  <li><strong>Different material.</strong> GSE5281 used laser-captured CA1 neurons, while GSE48350 used whole hippocampus tissue. Genes from glia or other cells may behave differently. This makes the test harder, but a robust marker should still show the same direction.</li>
+  <li><strong>Small test set.</strong> 23 samples gives a wide interval (see above), but even the top of that interval is close to chance.</li>
+</ul>
+
+<h2>What this means for the project</h2>
+<p>The website still works as a teaching tool: it shows how a gene panel score is built, and how to check a panel honestly. A next step would be to choose genes on several datasets together and test on another one, such as whole-tissue hippocampus data from a third study.</p>
+{% endif %}
+{% endblock %}

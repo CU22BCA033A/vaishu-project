@@ -1,116 +1,77 @@
-// main.js - small bits of interactivity. The website also works without it.
-
-// Tell the CSS that JavaScript is running (used to hide/show cutoff options)
-document.documentElement.classList.add("js");
+// main.js - a few small extras. Every page also works without JavaScript.
 
 
-// ---- 1. Light / dark theme button ----
-var themeButton = document.getElementById("themeToggle");
-if (themeButton) {
-  themeButton.addEventListener("click", function () {
-    var current = document.documentElement.getAttribute("data-theme");
-    if (!current) {
-      current = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+// 1. Dark / light theme button (the choice is remembered in the browser)
+var themeBtn = document.getElementById("themeBtn");
+if (themeBtn) {
+  themeBtn.addEventListener("click", function () {
+    var now = document.documentElement.getAttribute("data-theme");
+    if (!now) {
+      now = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
-    var next = current === "dark" ? "light" : "dark";
+    var next = (now === "dark") ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     try { localStorage.setItem("theme", next); } catch (e) {}
   });
 }
 
 
-// ---- 2. "Upload file" / "Paste text" tabs ----
-var tabs = document.querySelectorAll(".tab");
-tabs.forEach(function (tab) {
-  tab.addEventListener("click", function () {
-    tabs.forEach(function (t) { t.classList.remove("active"); });
-    document.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.remove("active"); });
-    tab.classList.add("active");
-    document.getElementById(tab.dataset.tab).classList.add("active");
-  });
-});
-
-// If the user had pasted text before an error, open the "Paste text" tab
-var pasteBox = document.querySelector("textarea[name='expression_text']");
-if (pasteBox && pasteBox.value.trim() !== "") {
-  document.querySelector(".tab[data-tab='paste-expr']").click();
+// 2. Only show the extra boxes for the cutoff option that is selected
+function showCutoffExtras() {
+  var picked = document.querySelector("input[name='cutoff_mode']:checked");
+  var boxes = document.querySelectorAll(".extra");
+  for (var i = 0; i < boxes.length; i++) {
+    var show = picked && boxes[i].getAttribute("data-for") === picked.value;
+    boxes[i].classList.toggle("show", show);
+  }
 }
-
-
-// ---- 3. Drag-and-drop file box ----
-var dropzone = document.querySelector(".dropzone");
-if (dropzone) {
-  var fileInput = dropzone.querySelector("input[type='file']");
-  var fileLabel = dropzone.querySelector(".dz-file");
-
-  fileInput.addEventListener("change", function () {
-    if (fileInput.files.length > 0) {
-      var file = fileInput.files[0];
-      var sizeKb = Math.round(file.size / 1024);
-      fileLabel.textContent = "✓ " + file.name + " (" + sizeKb + " KB)";
-      dropzone.classList.add("has-file");
-    }
-  });
-  ["dragenter", "dragover"].forEach(function (name) {
-    dropzone.addEventListener(name, function () { dropzone.classList.add("dragover"); });
-  });
-  ["dragleave", "drop"].forEach(function (name) {
-    dropzone.addEventListener(name, function () { dropzone.classList.remove("dragover"); });
-  });
+var cutoffRadios = document.querySelectorAll("input[name='cutoff_mode']");
+for (var i = 0; i < cutoffRadios.length; i++) {
+  cutoffRadios[i].addEventListener("change", showCutoffExtras);
 }
+showCutoffExtras();
 
 
-// ---- 4. Show the extra box for the chosen cutoff option ----
-function updateCutoffBoxes() {
-  var checked = document.querySelector("input[name='cutoff_mode']:checked");
-  document.querySelectorAll(".mode-extra").forEach(function (box) {
-    box.classList.toggle("show", checked && box.dataset.mode === checked.value);
-  });
-}
-document.querySelectorAll("input[name='cutoff_mode']").forEach(function (radio) {
-  radio.addEventListener("change", updateCutoffBoxes);
-});
-updateCutoffBoxes();
-
-
-// ---- 5. Spinner on the Analyze button while the server works ----
-var form = document.getElementById("analyze");
+// 3. Disable the button while the server is working, so it is not clicked twice
+var form = document.getElementById("analyzeForm");
 if (form) {
   form.addEventListener("submit", function () {
     var button = document.getElementById("submitBtn");
-    button.classList.add("loading");
-    button.querySelector(".btn-label").textContent = "Analyzing…";
+    button.disabled = true;
+    button.textContent = "Analyzing…";
   });
 }
 
 
-// ---- 6. Pick which sample to show in the gene-by-gene breakdown ----
+// 4. Choose which sample the gene-by-gene bars show
 var picker = document.getElementById("samplePicker");
 if (picker) {
   picker.addEventListener("change", function () {
-    document.querySelectorAll(".breakdown").forEach(function (box) {
-      box.classList.toggle("active", box.dataset.index === picker.value);
-    });
+    var boxes = document.querySelectorAll(".breakdown");
+    for (var i = 0; i < boxes.length; i++) {
+      boxes[i].classList.toggle("show", boxes[i].getAttribute("data-index") === picker.value);
+    }
   });
 }
 
 
-// ---- 7. Download the results table as a CSV file ----
-var downloadButton = document.getElementById("downloadCsv");
-if (downloadButton) {
-  downloadButton.addEventListener("click", function () {
+// 5. Download the results table as a CSV file
+var downloadBtn = document.getElementById("downloadBtn");
+if (downloadBtn) {
+  downloadBtn.addEventListener("click", function () {
     var lines = [];
-    document.querySelectorAll("#resultsTable tr").forEach(function (row) {
-      var cells = [];
-      row.querySelectorAll("th, td").forEach(function (cell) {
-        var text = cell.textContent.trim().replace(/"/g, '""');
-        cells.push('"' + text + '"');
-      });
-      lines.push(cells.join(","));
-    });
-    var blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    var rows = document.querySelectorAll("#resultsTable tr");
+    for (var r = 0; r < rows.length; r++) {
+      var cells = rows[r].querySelectorAll("th, td");
+      var values = [];
+      for (var c = 0; c < cells.length; c++) {
+        values.push('"' + cells[c].textContent.trim().replace(/"/g, '""') + '"');
+      }
+      lines.push(values.join(","));
+    }
+    var file = new Blob([lines.join("\n")], { type: "text/csv" });
     var link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
+    link.href = URL.createObjectURL(file);
     link.download = "panel_results.csv";
     link.click();
   });

@@ -1,35 +1,25 @@
-# NeuroPanel: hippocampus gene-panel explorer
+# Hippocampus gene panel
 
-A beginner Python project. It is a small website built with **Python (Flask)**, **HTML**, **CSS** and a little **JavaScript**.
+A course project for *Python for Beginners*. It is a small website written in **Python (Flask)**, **HTML**, **CSS** and a little **JavaScript**.
 
-You upload hippocampus gene-expression data and the site:
+You upload gene-expression data from hippocampus tissue. The site picks out 7 genes that differed between Alzheimer's and control brains in the GSE48350 dataset and gives each sample a score: positive leans toward the Alzheimer's group, negative toward the control group.
 
-1. finds the 7 panel genes (your file can contain every gene),
-2. compares each gene with 18 healthy control brains (z-score),
-3. combines them into one **panel score** per sample,
-4. says whether the sample's pattern looks more like the **Alzheimer's** group or the **control** group of the reference dataset (GSE48350).
+> **Not a medical test.** The panel needs post-mortem brain tissue, was built from 37 samples, and **did not replicate** on an independent dataset (see [Validation](#validation-on-gse5281)). It is a teaching project about how a gene panel score works and how to check it honestly.
 
-> ⚠️ **Educational project, not a medical test.** The panel comes from 37 post-mortem hippocampus samples in which disease and processing batch overlap, and it has not been validated on independent data. The output is a similarity comparison, not a diagnosis.
-
-![Home page](docs/home.png)
+![Analyze page](docs/home.png)
 
 ## How to run it
 
 You need Python 3.9 or newer.
 
 ```bash
-# 1. (optional but recommended) create a virtual environment
 python -m venv venv
-source venv/bin/activate        # on Windows: venv\Scripts\activate
-
-# 2. install Flask
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# 3. start the website
 python app.py
 ```
 
-Then open **http://127.0.0.1:5000** in your browser. Click **Example** in the menu to see results straight away.
+Open **http://127.0.0.1:5000**. Click the links under the intro to try the built-in data without uploading anything.
 
 Run the tests:
 
@@ -37,42 +27,93 @@ Run the tests:
 python test_analysis.py
 ```
 
+Re-run the validation (downloads 36 MB from NCBI GEO the first time):
+
+```bash
+python validation/validate_gse5281.py
+```
+
+## What the site does
+
+1. **Finds the 7 panel genes** in your file. Your file can contain every gene. If a gene has several rows (probes), the row with the highest average is used.
+2. **Compares each gene with a baseline** (a z-score), using one of two choices:
+   - **Your own batch** (10+ samples). This removes most lab and processing differences. It is used automatically when you upload 10 or more samples.
+   - **The 18 GSE48350 control brains.** Only meaningful for data processed exactly like GSE48350. Samples on a different scale are flagged "scale looks off".
+3. **Combines the genes** into one panel score: `average of (sign × z)`, where sign is +1 for genes higher in Alzheimer's and −1 for genes lower.
+4. **Calls each sample** Alzheimer's-like or control-like using a cutoff: 0 in batch mode, 0.46 with the GSE48350 controls, or your own number.
+5. **Checks the panel against your labels** (optional). If you add a `group` column or row with at least 3 controls and 3 Alzheimer's samples, the results page shows AUC, accuracy, sensitivity, specificity, and whether each gene moved in the expected direction. Labels are never used to calculate the scores.
+
+![Results for the 23 GSE5281 samples](docs/results.png)
+
+## Validation on GSE5281
+
+The genes were chosen on GSE48350, so accuracy measured on GSE48350 is too optimistic. The panel was therefore tested on **GSE5281**, a dataset it had never seen: 13 control and 10 Alzheimer's hippocampus samples on the same chip (Affymetrix HG-U133 Plus 2.0).
+
+| | Result |
+|---|---|
+| AUC | **0.29** (95% bootstrap interval 0.07–0.54); 0.5 = coin flip |
+| Permutation test | p = 0.95 |
+| Accuracy (score > 0) | 6 of 23 (26%) |
+| Genes in the expected direction | 2 of 7 |
+| AUC with other probe choices | 0.50 (average of probes), 0.53 (most variable probe) |
+
+**The panel does not separate Alzheimer's from control samples in GSE5281.** Possible reasons: the genes were picked from ~20,000 candidates using only 37 samples (overfitting), disease and processing batch overlap in GSE48350, and GSE5281 used laser-captured CA1 neurons rather than whole tissue. Nothing about the panel was changed after seeing these results.
+
+How the test was done is in [`validation/validate_gse5281.py`](validation/validate_gse5281.py) (plain Python, standard library only) and on the Validation page of the site. LINC03007 and LINC02987 have newer names than the chip annotation, so they were matched by NCBI Gene ID: 646588 → probe `236977_at`, 101927151 → probe `1569478_s_at`.
+
+![Validation page](docs/validation.png)
+
 ## Project structure
 
 ```
 vaishu-project/
-├── app.py                  # the website: pages and form handling (Flask)
-├── analysis.py             # the science: reading files, z-scores, panel score
-├── test_analysis.py        # simple tests with assert
-├── requirements.txt        # Python packages needed (only Flask)
-├── templates/              # HTML pages (Jinja templates)
-│   ├── base.html           #   shared header, footer, theme button
-│   ├── index.html          #   home page with the upload form
-│   ├── results.html        #   results: summary, chart, table, gene bars
-│   └── about.html          #   "How it works" page
-└── static/
-    ├── css/style.css       # all the styling (light + dark mode, mobile)
-    ├── js/main.js          # small extras: tabs, drag & drop, theme, CSV download
-    └── data/
-        ├── panel_reference.csv     # the 7-gene panel
-        └── example_expression.csv  # made-up example data to try the site
+├── app.py                    # the website: pages and form handling (Flask)
+├── analysis.py               # reading files, z-scores, panel score, AUC
+├── test_analysis.py          # simple tests with assert
+├── requirements.txt          # only Flask
+├── templates/                # HTML pages (Jinja)
+│   ├── base.html             #   header and footer shared by all pages
+│   ├── index.html            #   upload form
+│   ├── results.html          #   results, chart, gene-by-gene bars
+│   ├── validation.html       #   the GSE5281 check
+│   └── about.html            #   how the score is calculated
+├── static/
+│   ├── css/style.css
+│   ├── js/main.js            # theme button, form helpers, CSV download
+│   └── data/
+│       ├── panel_reference.csv      # the 7 genes + GSE48350 control mean/SD
+│       └── example_expression.csv   # made-up example (5 samples)
+├── validation/
+│   ├── validate_gse5281.py   # independent test of the panel
+│   └── results/              # its output (summary + the 23 samples)
+└── docs/                     # screenshots for this README
 ```
 
-`analysis.py` does not import Flask, so you can test the science part on its own.
+`analysis.py` does not import Flask, so the science can be tested on its own.
 
-## The panel score
+## Input file layouts
 
-For each panel gene:
+Genes as rows (an optional `group` row labels the samples):
 
 ```
-z            = (value - control_mean) / control_sd
-contribution = sign * z          # sign = +1 if higher in Alzheimer's, -1 if lower
+gene,P1,P2,P3
+group,control,AD,AD
+ANKIB1,0.52,1.31,0.97
+RAE1,2.61,1.98,2.10
 ```
 
-The panel score is the average contribution. If it is above the cutoff, the sample is called "Alzheimer's-like".
-The default cutoff **0.46** is the 95th percentile of the 18 reference control scores. You can also calculate it from your own `panel_scores.csv` (columns `sample, group, panel_score`) or type your own number.
+Samples as rows (an optional `group` column):
 
-| Gene | Direction in Alzheimer's | Control mean (log2) | Control SD |
+```
+sample,group,ANKIB1,RAE1,SLC25A46,...
+P1,control,0.52,2.61,-0.30,...
+```
+
+CSV, TSV and semicolon-separated files work. Values should be log2.
+
+## The panel
+
+| Gene | In Alzheimer's (GSE48350) | Control mean (log2) | Control SD |
 |---|---|---|---|
 | ANKIB1 | higher | 0.423 | 0.525 |
 | RAE1 | lower | 2.587 | 0.486 |
@@ -82,35 +123,4 @@ The default cutoff **0.46** is the 95th percentile of the 18 reference control s
 | ONECUT3 | higher | 0.040 | 0.162 |
 | LINC02987 | lower | 1.214 | 0.414 |
 
-## Input file layouts
-
-**Genes as rows** (one column per sample):
-
-```
-gene,patient_1,patient_2
-ANKIB1,0.52,1.31
-RAE1,2.61,1.98
-APP,1.20,1.18
-```
-
-**Samples as rows** (one column per gene):
-
-```
-sample,group,ANKIB1,RAE1,SLC25A46,...
-P1,control,0.52,2.61,-0.30,...
-```
-
-CSV, TSV and semicolon files all work. Values must be log2 and normalized the same way as the reference data, otherwise the site shows "scale looks off". If a gene appears on several rows (several probes), the row with the highest average is used.
-
-## Screenshots
-
-| Results (with reference scores) | Dark mode | Phone |
-|---|---|---|
-| ![Results](docs/results.png) | ![Dark mode](docs/dark.png) | ![Phone](docs/mobile.png) |
-
-## Limitations
-
-- Small dataset (37 samples: 18 control, 19 Alzheimer's).
-- Disease and processing batch overlap in the reference data.
-- Not validated on independent data.
-- The example data in `static/data/example_expression.csv` is made up for demonstration.
+Means and SDs come from the 18 control samples of the cleaned GSE48350 hippocampus data (highest-expressed probe per gene).

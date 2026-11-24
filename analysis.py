@@ -9,8 +9,10 @@ The idea in 4 steps:
   1. Read the panel reference (7 genes, their direction, and the mean / SD
      measured in healthy control brains).
   2. Read the user's gene expression table and pick out only the panel genes.
-  3. For every gene, compute a z-score:  z = (value - control_mean) / control_sd
-     and multiply it by the gene's sign (+1 = higher in Alzheimer's,
+  3. For every gene, compute a z-score:  z = (value - mean) / sd
+     The mean and SD come either from the GSE48350 controls ("reference"
+     mode) or from the uploaded samples themselves ("batch" mode).
+     Multiply z by the gene's sign (+1 = higher in Alzheimer's,
      -1 = lower in Alzheimer's). This is the gene's "contribution".
   4. The panel score is the average contribution. If it is above the cutoff,
      the sample looks more like the Alzheimer's group than the control group.
@@ -315,6 +317,12 @@ def parse_genes_as_rows(rows, panel_genes, gene_col):
     else:
         names = [header[i] for i in sample_cols]
 
+    # Optional row called "group" (e.g. group,control,AD,AD,...)
+    groups = ["" for _ in sample_cols]
+    for row in data_rows:
+        if len(row) > gene_col and row[gene_col].lower() == "group":
+            groups = [row[i] if i < len(row) else "" for i in sample_cols]
+
     # best_row[gene] = (average, row) for the strongest probe of that gene
     best_row = {}
     for row in data_rows:
@@ -336,26 +344,67 @@ def parse_genes_as_rows(rows, panel_genes, gene_col):
         for gene, (row_average, row) in best_row.items():
             if col < len(row) and is_number(row[col]):
                 values[gene] = float(row[col])
-        samples.append({"name": names[n], "group": "", "values": values})
+        samples.append({"name": names[n], "group": groups[n], "values": values})
     return samples
 
 
 # ---------------------------------------------------------------------------
 # Step 3 and 4: scoring
 # ---------------------------------------------------------------------------
+#
+# Two ways to decide what "normal" looks like for each gene:
+#
+#   "reference" mode: use the control mean and SD measured in GSE48350.
+#                     Only fair if your data was processed exactly like it.
+#
+#   "batch" mode:     use the mean and SD of YOUR uploaded samples.
+#                     This removes most lab/processing differences, but it
+#                     needs a batch of at least 10 samples that contains
+#                     both kinds of samples. Labels are NOT used for this.
 
-def score_sample(sample, panel):
+MIN_BATCH_SIZE = 10
+
+
+def reference_centers(panel):
+    """Mean and SD for each gene, taken from the panel reference file."""
+    centers = {}
+    for p in panel:
+        centers[p["gene"]] = (p["mean"], p["sd"])
+    return centers
+
+
+def standard_deviation(values):
+    m = average(values)
+    return math.sqrt(sum((v - m) ** 2 for v in values) / (len(values) - 1))
+
+
+def batch_centers(panel, samples):
+    """Mean and SD for each gene, calculated from the uploaded samples."""
+    centers = {}
+    for p in panel:
+        values = [s["values"][p["gene"]] for s in samples if p["gene"] in s["values"]]
+        if len(values) < 3:
+            continue
+        sd = standard_deviation(values)
+        if sd > 0:
+            centers[p["gene"]] = (average(values), sd)
+    return centers
+
+
+def score_sample(sample, panel, centers):
     """
     Compare one sample with the panel.
+    centers[gene] = (mean, sd) to compare against.
     Returns the per-gene details and the overall panel score.
     """
     genes = []
     for p in panel:
         gene = p["gene"]
-        if gene not in sample["values"]:
+        if gene not in sample["values"] or gene not in centers:
             continue
         value = sample["values"][gene]
-        z = (value - p["mean"]) / p["sd"]
+        mean, sd = centers[gene]
+        z = (value - mean) / sd
         contribution = p["sign"] * z
         genes.append({
             "gene": gene,
@@ -373,17 +422,62 @@ def score_sample(sample, panel):
     return {"genes": genes, "found": len(genes), "score": score, "mean_abs_z": mean_abs_z}
 
 
-def analyze(panel, samples, cutoff):
+def group_label(text):
+    """
+    Turn the text in a 'group' column into 1 (Alzheimer's), 0 (control)
+    or None (unknown / not given).
+    """
+    t = text.strip().lower()
+    if t == "":
+        return None
+    for word in ("control", "normal", "healthy", "ctl", "ctrl", "nc"):
+        if t == word or t.startswith(word):
+            return 0
+    for word in ("alzheimer", "ad", "case", "disease", "patient"):
+        if t == word or t.startswith(word):
+            return 1
+    return None
+
+
+def auc(scores, labels):
+    """
+    Area under the ROC curve: the chance that a random Alzheimer's sample
+    scores higher than a random control sample. 0.5 = coin flip, 1 = perfect.
+    """
+    ad = [s for s, y in zip(scores, labels) if y == 1]
+    ctl = [s for s, y in zip(scores, labels) if y == 0]
+    wins = 0.0
+    for a in ad:
+        for c in ctl:
+            if a > c:
+                wins += 1
+            elif a == c:
+                wins += 0.5
+    return wins / (len(ad) * len(ctl))
+
+
+def analyze(panel, samples, cutoff, mode="reference"):
     """
     Score every sample and decide which pattern it looks like.
+    mode is "reference" or "batch" (see the comment above).
     Returns a dictionary with the results and a few summary numbers.
     """
     needed = math.ceil(len(panel) * MIN_GENE_FRACTION)
+
+    if mode == "batch":
+        if len(samples) < MIN_BATCH_SIZE:
+            raise AnalysisError(
+                "Batch mode needs at least " + str(MIN_BATCH_SIZE) + " samples, but your file has "
+                + str(len(samples)) + ". Upload more samples or use the GSE48350 reference instead."
+            )
+        centers = batch_centers(panel, samples)
+    else:
+        centers = reference_centers(panel)
+
     results = []
     skipped = []
-
     for sample in samples:
-        result = score_sample(sample, panel)
+        result = score_sample(sample, panel, centers)
         if result["found"] < needed:
             skipped.append(sample["name"])
             continue
@@ -399,15 +493,15 @@ def analyze(panel, samples, cutoff):
         if result["found"] < len(panel):
             missing = [p["gene"] for p in panel if p["gene"] not in sample["values"]]
             flags.append("missing " + ", ".join(missing))
-        if result["mean_abs_z"] > 5:
+        if mode == "reference" and result["mean_abs_z"] > 5:
             flags.append("scale looks off")
 
-        # Largest absolute contribution, used to draw the bars at the same scale
         biggest = max(abs(g["contribution"]) for g in result["genes"])
 
         results.append({
             "name": sample["name"],
             "group": sample["group"],
+            "label": group_label(sample["group"]),
             "found": result["found"],
             "score": result["score"],
             "genes": result["genes"],
@@ -429,6 +523,7 @@ def analyze(panel, samples, cutoff):
         for g in r["genes"]:
             g["bar_width"] = min(100, abs(g["contribution"]) / bar_scale * 100)
 
+    scale_warnings = len([r for r in results if "scale looks off" in r["flags"]])
     ad_count = len([r for r in results if r["pattern_class"] == "ad"])
     return {
         "results": results,
@@ -437,8 +532,83 @@ def analyze(panel, samples, cutoff):
         "ad_count": ad_count,
         "ctl_count": len(results) - ad_count,
         "cutoff": cutoff,
+        "mode": mode,
         "panel_size": len(panel),
+        "scale_warnings": scale_warnings,
+        "check": check_against_labels(results, panel, cutoff),
     }
+
+
+def check_against_labels(results, panel, cutoff):
+    """
+    If the user told us which samples are Alzheimer's and which are controls,
+    measure how well the panel separates them. Returns None if there are not
+    at least 3 samples in each group.
+    """
+    labelled = [r for r in results if r["label"] is not None]
+    labels = [r["label"] for r in labelled]
+    n_ad = labels.count(1)
+    n_ctl = labels.count(0)
+    if n_ad < 3 or n_ctl < 3:
+        return None
+
+    scores = [r["score"] for r in labelled]
+    true_pos = len([r for r in labelled if r["label"] == 1 and r["score"] > cutoff])
+    true_neg = len([r for r in labelled if r["label"] == 0 and r["score"] <= cutoff])
+
+    # Does each gene move in the direction the panel expects?
+    genes = []
+    for p in panel:
+        ad_values = [r_value(r, p["gene"]) for r in labelled if r["label"] == 1]
+        ctl_values = [r_value(r, p["gene"]) for r in labelled if r["label"] == 0]
+        ad_values = [v for v in ad_values if v is not None]
+        ctl_values = [v for v in ctl_values if v is not None]
+        if len(ad_values) == 0 or len(ctl_values) == 0:
+            continue
+        difference = average(ad_values) - average(ctl_values)
+        genes.append({
+            "gene": p["gene"],
+            "expected": "higher" if p["sign"] > 0 else "lower",
+            "observed": "higher" if difference > 0 else "lower",
+            "agrees": (difference > 0) == (p["sign"] > 0),
+            "difference": difference,
+        })
+
+    return {
+        "n_ad": n_ad,
+        "n_ctl": n_ctl,
+        "auc": auc(scores, labels),
+        "accuracy": (true_pos + true_neg) / len(labelled),
+        "correct": true_pos + true_neg,
+        "total": len(labelled),
+        "sensitivity": true_pos / n_ad,
+        "specificity": true_neg / n_ctl,
+        "genes": genes,
+        "genes_agree": len([g for g in genes if g["agrees"]]),
+    }
+
+
+def r_value(result, gene):
+    """The measured value of one gene in one scored sample (or None)."""
+    for g in result["genes"]:
+        if g["gene"] == gene:
+            return g["value"]
+    return None
+
+
+def describe_auc(value):
+    """Plain-words meaning of an AUC value."""
+    if value >= 0.9:
+        return "Excellent separation"
+    if value >= 0.8:
+        return "Good separation"
+    if value >= 0.7:
+        return "Fair separation"
+    if value > 0.6:
+        return "Weak separation"
+    if value >= 0.4:
+        return "No real separation (close to a coin flip)"
+    return "Reversed: Alzheimer's samples tend to score lower than controls"
 
 
 # ---------------------------------------------------------------------------
@@ -454,8 +624,8 @@ def build_chart(report, reference=None):
     left = 30
     right = width - 30
 
-    sample_scores = [r["score"] for r in report["results"]]
-    all_values = sample_scores + [report["cutoff"]]
+    results = report["results"]
+    all_values = [r["score"] for r in results] + [report["cutoff"]]
     if reference:
         all_values += reference["controls"] + reference["alzheimers"]
 
@@ -471,27 +641,28 @@ def build_chart(report, reference=None):
     def x_of(value):
         return left + (value - low) / (high - low) * (right - left)
 
+    def points(items):
+        return [{"x": x_of(r["score"]), "label": r["name"] + ": %.2f" % r["score"]} for r in items]
+
     # Rows of dots, from top to bottom
     rows = []
     if reference:
-        rows.append({
-            "label": "Reference controls",
-            "kind": "ctl",
-            "points": [{"x": x_of(v), "label": "%.2f" % v} for v in reference["controls"]],
-        })
-        rows.append({
-            "label": "Reference Alzheimer's",
-            "kind": "ad",
-            "points": [{"x": x_of(v), "label": "%.2f" % v} for v in reference["alzheimers"]],
-        })
-    rows.append({
-        "label": "Your samples",
-        "kind": "you",
-        "points": [
-            {"x": x_of(r["score"]), "label": r["name"] + ": %.2f" % r["score"]}
-            for r in report["results"]
-        ],
-    })
+        rows.append({"label": "Reference controls (GSE48350)", "kind": "ctl",
+                     "points": [{"x": x_of(v), "label": "%.2f" % v} for v in reference["controls"]]})
+        rows.append({"label": "Reference Alzheimer's (GSE48350)", "kind": "ad",
+                     "points": [{"x": x_of(v), "label": "%.2f" % v} for v in reference["alzheimers"]]})
+
+    if report["check"]:
+        # The user gave groups: draw their controls and Alzheimer's separately
+        rows.append({"label": "Your samples labelled control", "kind": "ctl-you",
+                     "points": points([r for r in results if r["label"] == 0])})
+        rows.append({"label": "Your samples labelled Alzheimer's", "kind": "ad-you",
+                     "points": points([r for r in results if r["label"] == 1])})
+        unlabelled = [r for r in results if r["label"] is None]
+        if unlabelled:
+            rows.append({"label": "Your samples without a label", "kind": "you", "points": points(unlabelled)})
+    else:
+        rows.append({"label": "Your samples", "kind": "you", "points": points(results)})
 
     # Give every row its own height and spread dots a little up/down (jitter)
     row_height = 56
@@ -520,3 +691,21 @@ def build_chart(report, reference=None):
         "cutoff_x": x_of(report["cutoff"]),
         "cutoff": report["cutoff"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Results of the independent check on GSE5281 (made by validation/validate_gse5281.py)
+# ---------------------------------------------------------------------------
+
+VALIDATION_FOLDER = os.path.join(os.path.dirname(__file__), "validation", "results")
+VALIDATION_SUMMARY = os.path.join(VALIDATION_FOLDER, "gse5281_summary.json")
+VALIDATION_BATCH = os.path.join(VALIDATION_FOLDER, "gse5281_panel_genes.csv")
+
+
+def load_validation():
+    """Read the GSE5281 summary, or return None if the script was not run yet."""
+    import json
+    if not os.path.exists(VALIDATION_SUMMARY):
+        return None
+    with open(VALIDATION_SUMMARY) as f:
+        return json.load(f)

@@ -8,10 +8,12 @@ Run it with:
 and open http://127.0.0.1:5000 in your browser.
 
 Pages:
-    /          -> home page with the upload form
-    /analyze   -> receives the form, runs the analysis, shows the results
-    /example   -> runs the analysis on the built-in example data
-    /about     -> explains how the panel score works
+    /                  -> home page with the upload form
+    /analyze           -> receives the form, runs the analysis, shows the results
+    /example           -> made-up example data (reference mode)
+    /example/gse5281   -> real data: 23 hippocampus samples from GSE5281 (batch mode)
+    /validation        -> how the panel did on the independent GSE5281 dataset
+    /about             -> how the panel score works
 """
 
 from flask import Flask, render_template, request
@@ -22,6 +24,9 @@ app = Flask(__name__)
 
 # Whole-genome expression files can be big, so allow uploads up to 50 MB.
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+
+REFERENCE_CUTOFF_TEXT = "95th percentile of the 18 GSE48350 control scores (measured on the same data the panel was chosen from)"
+BATCH_CUTOFF_TEXT = "0 = the average of your batch"
 
 
 def get_text(file_field, text_field):
@@ -36,14 +41,6 @@ def get_text(file_field, text_field):
     return request.form.get(text_field, "").strip()
 
 
-def panel_as_list(panel_text):
-    """Panel genes for the 'panel at a glance' section. Returns [] on error."""
-    try:
-        return analysis.parse_panel(panel_text)
-    except analysis.AnalysisError:
-        return []
-
-
 def show_form(error=None, form=None):
     """Draw the home page. Used on first visit and when something went wrong."""
     form = form or {}
@@ -53,21 +50,27 @@ def show_form(error=None, form=None):
         error=error,
         form=form,
         panel_text=panel_text,
-        panel=panel_as_list(analysis.default_panel_text()),
+        panel=analysis.parse_panel(analysis.default_panel_text()),
         default_cutoff=analysis.DEFAULT_CUTOFF,
+        min_batch=analysis.MIN_BATCH_SIZE,
+        validation=analysis.load_validation(),
     )
 
 
-def show_results(panel, samples, cutoff, cutoff_source, reference=None):
+def show_results(panel, samples, cutoff, cutoff_source, mode, reference=None, title=None):
     """Score the samples and draw the results page."""
-    report = analysis.analyze(panel, samples, cutoff)
+    report = analysis.analyze(panel, samples, cutoff, mode)
     chart = analysis.build_chart(report, reference)
+    auc_words = analysis.describe_auc(report["check"]["auc"]) if report["check"] else None
     return render_template(
         "results.html",
         report=report,
         chart=chart,
         cutoff_source=cutoff_source,
         reference=reference,
+        auc_words=auc_words,
+        title=title,
+        min_batch=analysis.MIN_BATCH_SIZE,
     )
 
 
@@ -85,35 +88,43 @@ def analyze():
             panel_text = analysis.default_panel_text()
         panel = analysis.parse_panel(panel_text)
 
-        # 2. Cutoff: default, calculated from reference scores, or typed in
-        mode = request.form.get("cutoff_mode", "default")
-        reference = None
-        if mode == "reference":
-            scores_text = get_text("scores_file", "scores_text")
-            if scores_text == "":
-                raise analysis.AnalysisError(
-                    "You chose 'calculate from reference scores' but did not add a scores file."
-                )
-            reference = analysis.parse_reference_scores(scores_text)
-            cutoff = reference["cutoff"]
-            cutoff_source = "95th percentile of your reference control scores"
-        elif mode == "custom":
-            typed = request.form.get("cutoff_value", "").strip()
-            if not analysis.is_number(typed):
-                raise analysis.AnalysisError("Please type a number for the custom cutoff.")
-            cutoff = float(typed)
-            cutoff_source = "custom value you typed"
-        else:
-            cutoff = analysis.DEFAULT_CUTOFF
-            cutoff_source = "default: 95th percentile of the 18 GSE48350 control scores"
-
-        # 3. Expression data
+        # 2. Expression data
         expression_text = get_text("expression_file", "expression_text")
         if expression_text == "":
             raise analysis.AnalysisError("Please upload or paste your gene expression data first.")
         samples = analysis.parse_expression(expression_text, panel)
 
-        return show_results(panel, samples, cutoff, cutoff_source, reference)
+        # 3. What to compare against: the GSE48350 numbers, or the batch itself
+        mode = request.form.get("compare_mode", "auto")
+        if mode == "auto":
+            mode = "batch" if len(samples) >= analysis.MIN_BATCH_SIZE else "reference"
+
+        # 4. Cutoff
+        cutoff_mode = request.form.get("cutoff_mode", "default")
+        reference = None
+        if cutoff_mode == "custom":
+            typed = request.form.get("cutoff_value", "").strip()
+            if not analysis.is_number(typed):
+                raise analysis.AnalysisError("Please type a number for the custom cutoff.")
+            cutoff = float(typed)
+            cutoff_source = "custom value you typed"
+        elif cutoff_mode == "reference" and mode == "reference":
+            scores_text = get_text("scores_file", "scores_text")
+            if scores_text == "":
+                raise analysis.AnalysisError(
+                    "You chose 'from reference scores' but did not add a scores file."
+                )
+            reference = analysis.parse_reference_scores(scores_text)
+            cutoff = reference["cutoff"]
+            cutoff_source = "95th percentile of your reference control scores"
+        elif mode == "batch":
+            cutoff = 0.0
+            cutoff_source = BATCH_CUTOFF_TEXT
+        else:
+            cutoff = analysis.DEFAULT_CUTOFF
+            cutoff_source = REFERENCE_CUTOFF_TEXT
+
+        return show_results(panel, samples, cutoff, cutoff_source, mode, reference)
 
     except analysis.AnalysisError as error:
         # Show the form again with the error and keep what the user typed
@@ -124,18 +135,28 @@ def analyze():
 def example():
     panel = analysis.parse_panel(analysis.default_panel_text())
     samples = analysis.parse_expression(analysis.read_file_text(analysis.EXAMPLE_FILE), panel)
-    return show_results(
-        panel,
-        samples,
-        analysis.DEFAULT_CUTOFF,
-        "default: 95th percentile of the 18 GSE48350 control scores",
-    )
+    return show_results(panel, samples, analysis.DEFAULT_CUTOFF, REFERENCE_CUTOFF_TEXT,
+                        "reference", title="Made-up example (5 samples)")
+
+
+@app.route("/example/gse5281")
+def example_gse5281():
+    panel = analysis.parse_panel(analysis.default_panel_text())
+    samples = analysis.parse_expression(analysis.read_file_text(analysis.VALIDATION_BATCH), panel)
+    return show_results(panel, samples, 0.0, BATCH_CUTOFF_TEXT, "batch",
+                        title="GSE5281 hippocampus (23 real samples)")
+
+
+@app.route("/validation")
+def validation():
+    return render_template("validation.html", v=analysis.load_validation())
 
 
 @app.route("/about")
 def about():
     panel = analysis.parse_panel(analysis.default_panel_text())
-    return render_template("about.html", panel=panel, default_cutoff=analysis.DEFAULT_CUTOFF)
+    return render_template("about.html", panel=panel, default_cutoff=analysis.DEFAULT_CUTOFF,
+                           min_batch=analysis.MIN_BATCH_SIZE)
 
 
 @app.errorhandler(413)

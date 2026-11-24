@@ -1,0 +1,24 @@
+sample,title,group,panel_score
+GSM119628,HIP control 1,control,0.2252
+GSM119629,HIP control 2,control,0.0275
+GSM119630,HIP control 3,control,-0.3523
+GSM119631,HIP control 4,control,0.2538
+GSM119632,HIP control 5,control,0.0052
+GSM119633,HIP control 6,control,0.1311
+GSM119634,HIP control 7,control,-0.2805
+GSM119635,HIP control 8,control,0.0996
+GSM119636,HIP control 9,control,0.1774
+GSM119637,HIP control 10,control,0.3261
+GSM119638,HIP control 11,control,0.3464
+GSM119639,HIP control 12,control,0.0397
+GSM119640,HIP control 13,control,0.3834
+GSM238799,HIP_affected_1,Alzheimer,0.2388
+GSM238800,HIP_affected_2,Alzheimer,0.3222
+GSM238801,HIP_affected_3,Alzheimer,0.2942
+GSM238802,HIP_affected_4,Alzheimer,-0.8779
+GSM238803,HIP_affected_5,Alzheimer,-0.4397
+GSM238804,HIP_affected_6,Alzheimer,-0.1633
+GSM238805,HIP_affected_7,Alzheimer,-0.6198
+GSM238806,HIP_affected_8,Alzheimer,0.0116
+GSM238807,HIP_affected_9,Alzheimer,-0.0526
+GSM238808,HIP_affected_10,Alzheimer,-0.096

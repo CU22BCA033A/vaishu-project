@@ -2,158 +2,131 @@
 {% block title %}Analyze{% endblock %}
 
 {% block content %}
-<section class="hero">
-  <div class="hero-text">
-    <span class="eyebrow">Hippocampus · 7-gene panel · GSE48350</span>
-    <h1>Does a sample’s gene pattern look more like <span class="hl-ad">Alzheimer’s</span> or <span class="hl-ctl">control</span>?</h1>
-    <p class="lead">Upload hippocampus gene-expression data. NeuroPanel finds the 7 panel genes, compares each one with healthy control brains and gives every sample a single panel score.</p>
-    <div class="hero-actions">
-      <a href="#analyze" class="btn btn-primary">Start analysis</a>
-      <a href="{{ url_for('example') }}" class="btn btn-ghost">Try the example data →</a>
-    </div>
-  </div>
+<h1>Score hippocampus samples with a 7-gene panel</h1>
+<p class="lead">Upload gene-expression data from hippocampus tissue. The site picks out 7 genes that differed between Alzheimer’s and control brains in the GSE48350 dataset and gives each sample a score: positive means its pattern leans toward the Alzheimer’s group, negative toward the control group.</p>
 
-  <div class="hero-panel card">
-    <div class="card-head">
-      <h2>The panel at a glance</h2>
-      <a class="small-link" href="{{ url_for('about') }}">Details</a>
-    </div>
-    <ul class="gene-chips">
-      {% for p in panel %}
-      <li class="chip {{ 'chip-up' if p.sign > 0 else 'chip-down' }}">
-        <span class="chip-arrow" aria-hidden="true">{{ '▲' if p.sign > 0 else '▼' }}</span>
-        <span class="mono">{{ p.gene }}</span>
-      </li>
-      {% endfor %}
-    </ul>
-    <p class="muted small"><span class="txt-ad">▲ higher</span> or <span class="txt-ctl">▼ lower</span> in the Alzheimer’s group of the reference dataset.</p>
-  </div>
-</section>
-
-<div class="notice">
-  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3 2 21h20L12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-  <div>
-    <strong>Not a medical test.</strong> The panel comes from 37 post-mortem hippocampus samples in which disease and processing batch overlap, and it has not been checked on independent data. The result says which group a sample resembles in that dataset. It is not a diagnosis.
-  </div>
-</div>
-
-{% if error %}
-<div class="alert" role="alert">
-  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v6M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-  <div><strong>Something needs fixing.</strong> {{ error }} <span class="muted">(Uploaded files need to be chosen again.)</span></div>
+{% if validation %}
+<div class="status">
+  <p><strong>Current status of the panel:</strong> on an independent dataset (GSE5281, {{ validation.n_control + validation.n_alzheimers }} hippocampus samples) the panel did <strong>not</strong> separate Alzheimer’s from controls (AUC {{ "%.2f"|format(validation.auc) }}; 0.5 would be a coin flip). <a href="{{ url_for('validation') }}">See the validation</a>.</p>
 </div>
 {% endif %}
 
-<form id="analyze" class="steps" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+<div class="note">
+  <p>This is a course project, not a medical test. The panel was built from 37 post-mortem samples and needs brain tissue, so it cannot be used on living people.</p>
+</div>
 
-  <!-- STEP 1: expression data -->
-  <section class="card step">
-    <div class="step-num">1</div>
-    <div class="step-body">
-      <h2>Your expression data</h2>
-      <p class="muted">A CSV or TSV file from the hippocampus. You can include every gene: only the panel genes are used. Values must be log2 and normalized the same way as the reference.</p>
+<p>No data at hand? Try
+  <a href="{{ url_for('example_gse5281') }}">23 real GSE5281 samples</a> or
+  <a href="{{ url_for('example') }}">a small made-up example</a>.
+</p>
 
-      <div class="tabs" role="tablist">
-        <button type="button" class="tab active" data-tab="upload-expr" role="tab">Upload file</button>
-        <button type="button" class="tab" data-tab="paste-expr" role="tab">Paste text</button>
-      </div>
+{% if error %}
+<div class="error" role="alert">
+  <p><strong>Could not analyze the data.</strong> {{ error }}</p>
+  <p class="small">If you uploaded files, choose them again: browsers do not keep them after an error.</p>
+</div>
+{% endif %}
 
-      <div class="tab-panel active" id="upload-expr">
-        <label class="dropzone" for="expression_file">
-          <input type="file" id="expression_file" name="expression_file" accept=".csv,.tsv,.txt">
-          <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <span class="dz-title">Drop your file here or <u>browse</u></span>
-          <span class="dz-file muted">.csv, .tsv or .txt · up to 50 MB</span>
-        </label>
-      </div>
+<form id="analyzeForm" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
 
-      <div class="tab-panel" id="paste-expr">
-        <textarea name="expression_text" rows="7" spellcheck="false" placeholder="gene,sample1,sample2&#10;ANKIB1,0.51,1.20&#10;RAE1,2.60,2.01&#10;...">{{ form.get('expression_text', '') }}</textarea>
-      </div>
+  <fieldset>
+    <legend><span class="step">1.</span> Expression data</legend>
+    <p class="small muted">CSV or TSV, log2 values. Your file can contain every gene: only the 7 panel genes are used.</p>
+    <input type="file" name="expression_file" accept=".csv,.tsv,.txt">
+    <span class="or">or paste the table:</span>
+    <textarea name="expression_text" rows="6" spellcheck="false" placeholder="gene,sample_1,sample_2&#10;ANKIB1,0.51,1.20&#10;RAE1,2.60,2.01">{{ form.get('expression_text', '') }}</textarea>
 
-      <details class="format-help">
-        <summary>Which file layouts work?</summary>
-        <div class="layouts">
-          <div>
-            <p><strong>Genes as rows</strong> (most common)</p>
-<pre>gene,patient_1,patient_2
-ANKIB1,0.52,1.31
-RAE1,2.61,1.98
-APP,1.20,1.18</pre>
-          </div>
-          <div>
-            <p><strong>Samples as rows</strong></p>
-<pre>sample,group,ANKIB1,RAE1,...
-P1,control,0.52,2.61,...
-P2,AD,1.31,1.98,...</pre>
-          </div>
+    <details>
+      <summary>Accepted layouts</summary>
+      <div class="two-col">
+        <div>
+          <p class="small"><strong>Genes as rows</strong>. An optional <code>group</code> row tells the site which samples are which.</p>
+<pre>gene,P1,P2,P3
+group,control,AD,AD
+ANKIB1,0.52,1.31,0.97
+RAE1,2.61,1.98,2.10</pre>
         </div>
-        <p class="muted small">If a gene appears on several rows (several probes), the row with the highest average is used. <a href="{{ url_for('static', filename='data/example_expression.csv') }}" download>Download the example file</a>.</p>
-      </details>
-    </div>
-  </section>
-
-  <!-- STEP 2: cutoff -->
-  <section class="card step">
-    <div class="step-num">2</div>
-    <div class="step-body">
-      <h2>Choose the cutoff</h2>
-      <p class="muted">Samples with a panel score above the cutoff are called “Alzheimer’s-like”.</p>
-
-      {% set mode = form.get('cutoff_mode', 'default') %}
-      <div class="radio-cards">
-        <label class="radio-card">
-          <input type="radio" name="cutoff_mode" value="default" {% if mode == 'default' %}checked{% endif %}>
-          <span class="rc-title">Default · {{ default_cutoff }}</span>
-          <span class="rc-text">95th percentile of the 18 reference control scores.</span>
-        </label>
-        <label class="radio-card">
-          <input type="radio" name="cutoff_mode" value="reference" {% if mode == 'reference' %}checked{% endif %}>
-          <span class="rc-title">From reference scores</span>
-          <span class="rc-text">Upload <code>panel_scores.csv</code> and it is calculated for you.</span>
-        </label>
-        <label class="radio-card">
-          <input type="radio" name="cutoff_mode" value="custom" {% if mode == 'custom' %}checked{% endif %}>
-          <span class="rc-title">Custom value</span>
-          <span class="rc-text">Type your own number.</span>
-        </label>
+        <div>
+          <p class="small"><strong>Samples as rows</strong>, with an optional <code>group</code> column.</p>
+<pre>sample,group,ANKIB1,RAE1
+P1,control,0.52,2.61
+P2,AD,1.31,1.98</pre>
+        </div>
       </div>
+      <p class="small muted">Group names that are recognised: control / normal / healthy, and Alzheimer / AD / case. With at least 3 of each, the results page also shows how well the panel separates them. If a gene has several rows (probes), the row with the highest average is used.</p>
+    </details>
+  </fieldset>
 
-      <div class="mode-extra" data-mode="reference">
-        <p class="muted small">Columns: <code>sample, group, panel_score</code>. Rows whose group contains “control” are used for the cutoff, and all rows appear on the chart.</p>
-        <input type="file" name="scores_file" accept=".csv,.tsv,.txt" class="file-input">
-        <textarea name="scores_text" rows="4" spellcheck="false" placeholder="…or paste: sample,group,panel_score">{{ form.get('scores_text', '') }}</textarea>
-      </div>
-
-      <div class="mode-extra" data-mode="custom">
-        <label class="inline-field">Cutoff
-          <input type="number" step="any" name="cutoff_value" value="{{ form.get('cutoff_value', default_cutoff) }}">
-        </label>
-      </div>
+  <fieldset>
+    <legend><span class="step">2.</span> Compare each gene with…</legend>
+    {% set cmode = form.get('compare_mode', 'auto') %}
+    <div class="choices">
+      <label class="choice">
+        <input type="radio" name="compare_mode" value="auto" {{ 'checked' if cmode == 'auto' }}>
+        <span>Choose automatically</span>
+        <span class="hint">Your own batch if you upload {{ min_batch }} or more samples, otherwise the GSE48350 controls.</span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="compare_mode" value="batch" {{ 'checked' if cmode == 'batch' }}>
+        <span>The average of my batch</span>
+        <span class="hint">Works for data from any lab. Needs at least {{ min_batch }} samples, with both kinds in the batch.</span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="compare_mode" value="reference" {{ 'checked' if cmode == 'reference' }}>
+        <span>The 18 GSE48350 control brains</span>
+        <span class="hint">Only meaningful if your data was processed the same way as GSE48350. Otherwise the scores are wrong.</span>
+      </label>
     </div>
-  </section>
+  </fieldset>
 
-  <!-- STEP 3: panel reference (advanced) -->
-  <section class="card step">
-    <div class="step-num">3</div>
-    <div class="step-body">
-      <h2>Panel reference <span class="tag">optional</span></h2>
-      <p class="muted">Already filled in with the 7-gene panel. Change it only if you made your own panel.</p>
-      <details class="advanced">
-        <summary>Show or edit the panel reference</summary>
-        <p class="muted small">One line per gene: <code>gene,sign,control_mean,control_sd</code>. Sign 1 = higher in Alzheimer’s, −1 = lower. Means and SDs are from the 18 control samples (log2).</p>
-        <textarea name="panel_text" rows="9" spellcheck="false" class="mono">{{ panel_text }}</textarea>
-        <input type="file" name="panel_file" accept=".csv,.tsv,.txt" class="file-input">
-      </details>
+  <fieldset>
+    <legend><span class="step">3.</span> Cutoff</legend>
+    {% set mode = form.get('cutoff_mode', 'default') %}
+    <div class="choices">
+      <label class="choice">
+        <input type="radio" name="cutoff_mode" value="default" {{ 'checked' if mode == 'default' }}>
+        <span>Standard</span>
+        <span class="hint">0 in batch mode (the batch average); {{ default_cutoff }} with the GSE48350 controls.</span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="cutoff_mode" value="reference" {{ 'checked' if mode == 'reference' }}>
+        <span>From a reference scores file</span>
+        <span class="hint">Only with the GSE48350 controls. Upload <code>panel_scores.csv</code> (sample, group, panel_score).</span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="cutoff_mode" value="custom" {{ 'checked' if mode == 'custom' }}>
+        <span>My own number</span>
+        <span class="hint">For trying out different cutoffs.</span>
+      </label>
     </div>
-  </section>
+    <div class="extra" data-for="reference">
+      <input type="file" name="scores_file" accept=".csv,.tsv,.txt">
+      <span class="or">or paste:</span>
+      <textarea name="scores_text" rows="3" spellcheck="false" placeholder="sample,group,panel_score">{{ form.get('scores_text', '') }}</textarea>
+    </div>
+    <div class="extra" data-for="custom">
+      <label>Cutoff <input type="number" step="any" name="cutoff_value" value="{{ form.get('cutoff_value', default_cutoff) }}"></label>
+    </div>
+  </fieldset>
 
-  <div class="submit-row">
-    <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
-      <span class="btn-label">Analyze samples</span>
-      <span class="spinner" aria-hidden="true"></span>
-    </button>
-    <span class="muted small">Your data is processed on this server and is not saved.</span>
+  <details>
+    <summary>Edit the panel itself (optional)</summary>
+    <p class="small muted">One line per gene: <code>gene,sign,control_mean,control_sd</code>. Sign 1 = higher in Alzheimer’s, −1 = lower. The mean and SD are only used when comparing with the GSE48350 controls.</p>
+    <textarea name="panel_text" rows="9" spellcheck="false">{{ panel_text }}</textarea>
+    <input type="file" name="panel_file" accept=".csv,.tsv,.txt">
+  </details>
+
+  <div class="actions" style="margin-top:18px">
+    <button type="submit" class="btn" id="submitBtn">Analyze</button>
+    <span class="small muted">Files are read in memory and not stored.</span>
   </div>
 </form>
+
+<h2>The 7 genes</h2>
+<table>
+  <tr><th>Gene</th><th>In the Alzheimer’s group of GSE48350</th></tr>
+  {% for p in panel %}
+  <tr><td class="mono">{{ p.gene }}</td><td class="{{ 'ad' if p.sign > 0 else 'ctl' }}">{{ 'higher' if p.sign > 0 else 'lower' }}</td></tr>
+  {% endfor %}
+</table>
 {% endblock %}

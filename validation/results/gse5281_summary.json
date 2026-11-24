@@ -1,0 +1,98 @@
+{
+  "dataset": "GSE5281",
+  "tissue": "hippocampus (CA1 pyramidal neurons, laser-capture microdissected)",
+  "platform": "Affymetrix HG-U133 Plus 2.0 (GPL570), MAS5 signal, log2(x+1)",
+  "n_control": 13,
+  "n_alzheimers": 10,
+  "scoring": "within-dataset z-score per gene, panel score = mean(sign * z); labels not used",
+  "auc": 0.292,
+  "auc_ci95": [
+    0.069,
+    0.536
+  ],
+  "permutation_p": 0.9547,
+  "rule": "score > 0 = Alzheimer's-like (fixed in advance)",
+  "accuracy": 0.261,
+  "correct": 6,
+  "total": 23,
+  "sensitivity": 0.4,
+  "specificity": 0.154,
+  "genes_in_expected_direction": 2,
+  "genes": [
+    {
+      "gene": "ANKIB1",
+      "probe": "224682_at",
+      "expected": "higher",
+      "observed": "lower",
+      "agrees": false,
+      "ad_minus_control_log2": -0.004,
+      "auc_in_expected_direction": 0.569,
+      "mean_log2": 9.1
+    },
+    {
+      "gene": "RAE1",
+      "probe": "201558_at",
+      "expected": "lower",
+      "observed": "lower",
+      "agrees": true,
+      "ad_minus_control_log2": -0.065,
+      "auc_in_expected_direction": 0.654,
+      "mean_log2": 8.98
+    },
+    {
+      "gene": "SLC25A46",
+      "probe": "226831_at",
+      "expected": "higher",
+      "observed": "lower",
+      "agrees": false,
+      "ad_minus_control_log2": -0.92,
+      "auc_in_expected_direction": 0.131,
+      "mean_log2": 9.45
+    },
+    {
+      "gene": "LINC03007",
+      "probe": "236977_at",
+      "expected": "lower",
+      "observed": "lower",
+      "agrees": true,
+      "ad_minus_control_log2": -0.872,
+      "auc_in_expected_direction": 0.7,
+      "mean_log2": 4.99
+    },
+    {
+      "gene": "ZNF621",
+      "probe": "1558620_at",
+      "expected": "higher",
+      "observed": "lower",
+      "agrees": false,
+      "ad_minus_control_log2": -0.166,
+      "auc_in_expected_direction": 0.477,
+      "mean_log2": 6.29
+    },
+    {
+      "gene": "ONECUT3",
+      "probe": "234109_x_at",
+      "expected": "higher",
+      "observed": "lower",
+      "agrees": false,
+      "ad_minus_control_log2": -0.293,
+      "auc_in_expected_direction": 0.362,
+      "mean_log2": 4.85
+    },
+    {
+      "gene": "LINC02987",
+      "probe": "1569478_s_at",
+      "expected": "lower",
+      "observed": "higher",
+      "agrees": false,
+      "ad_minus_control_log2": 0.761,
+      "auc_in_expected_direction": 0.223,
+      "mean_log2": 7.0
+    }
+  ],
+  "probe_choice_check_auc": {
+    "highest-expressed probe (main rule)": 0.292,
+    "average of all probes": 0.5,
+    "most variable probe": 0.531
+  }
+}
