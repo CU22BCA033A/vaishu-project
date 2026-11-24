@@ -1,173 +1,195 @@
 {% extends "base.html" %}
 {% block title %}Results{% endblock %}
 
+{% block hero %}
+{% set results = report.results %}
+<section class="page-head">
+  <div class="container">
+    <span class="label">Results</span>
+    <h1>{{ title or (results|length|string + ' sample' + ('' if results|length == 1 else 's') + ' analyzed') }}</h1>
+    <p class="lead">
+      {% if report.mode == 'batch' %}Each gene was compared with the average of this batch of {{ results|length }} samples.
+      {% else %}Each gene was compared with the 18 GSE48350 control brains.{% endif %}
+      Cutoff <strong>{{ "%.2f"|format(report.cutoff) }}</strong>: {{ cutoff_source }}.
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-ink" href="{{ url_for('index') }}#analyze">New analysis</a>
+      <button type="button" class="btn btn-line" id="downloadBtn">Download CSV</button>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
 {% block content %}
 {% set results = report.results %}
-<h1>{{ title or 'Results' }}</h1>
-<p class="muted">
-  {% if report.mode == 'batch' %}
-    Each gene was compared with the average of this batch ({{ results|length }} samples).
-  {% else %}
-    Each gene was compared with the 18 GSE48350 control brains.
-  {% endif %}
-  Cutoff {{ "%.2f"|format(report.cutoff) }}: {{ cutoff_source }}.
-</p>
-
-<dl class="facts">
-  <div><dt>Samples scored</dt><dd>{{ results|length }}</dd></div>
-  <div><dt>Alzheimer’s-like</dt><dd class="ad">{{ report.ad_count }}</dd></div>
-  <div><dt>Control-like</dt><dd class="ctl">{{ report.ctl_count }}</dd></div>
-  <div><dt>Cutoff</dt><dd>{{ "%.2f"|format(report.cutoff) }}</dd></div>
-</dl>
-
-<div class="actions">
-  <a class="btn" href="{{ url_for('index') }}">New analysis</a>
-  <button type="button" class="btn plain" id="downloadBtn">Download table (CSV)</button>
-</div>
 
 {% if report.scale_warnings %}
-<div class="note">
-  <p><strong>{{ report.scale_warnings }} of {{ results|length }} samples look like they are on a different scale from GSE48350</strong>, so their scores are not reliable. This happens when data comes from another lab or was processed differently.
-  {% if results|length >= min_batch %}Run it again with “compare with the average of my batch”.{% else %}Batch mode would fix this but needs at least {{ min_batch }} samples.{% endif %}</p>
+<div class="callout callout-error">
+  <span class="icon">!</span>
+  <div><p><strong>{{ report.scale_warnings }} of {{ results|length }} samples are on a different scale from GSE48350</strong>, so their scores are not reliable. This happens with data from another lab or another processing method.
+  {% if results|length >= min_batch %}Run it again and choose <em>My batch</em> in step 2.{% else %}Batch mode would fix this but needs at least {{ min_batch }} samples.{% endif %}</p></div>
 </div>
 {% endif %}
 
 {% if report.mode == 'batch' and not report.check %}
-<div class="note">
-  <p>In batch mode the score says how a sample compares with the <em>rest of this batch</em>. It only makes sense if the batch contains both Alzheimer’s and control samples. Add a <code>group</code> column or row to see how well the panel separates them.</p>
+<div class="callout callout-info">
+  <span class="icon">i</span>
+  <div><p>In batch mode a score says how a sample compares with the <em>rest of this batch</em>, so the batch needs both Alzheimer’s and control samples. Add a <code>group</code> column or row to see how well the panel separates them.</p></div>
 </div>
 {% endif %}
+
+<div class="stats">
+  <div class="stat"><span class="label">Samples scored</span><div class="value">{{ results|length }}</div></div>
+  <div class="stat s-ad"><span class="label">Alzheimer’s-like</span><div class="value">{{ report.ad_count }}</div></div>
+  <div class="stat s-ctl"><span class="label">Control-like</span><div class="value">{{ report.ctl_count }}</div></div>
+  <div class="stat s-gold"><span class="label">Cutoff</span><div class="value">{{ "%.2f"|format(report.cutoff) }}</div></div>
+</div>
 
 {% if report.check %}
 {% set c = report.check %}
-<h2>Does the panel separate your groups?</h2>
-<p>You labelled {{ c.n_ctl }} control and {{ c.n_ad }} Alzheimer’s samples. The labels were only used for this check, not for the scores.</p>
-<div class="verdict">
-  <div class="big-number">AUC {{ "%.2f"|format(c.auc) }}</div>
-  <p><strong>{{ auc_words }}.</strong> AUC is the chance that a random Alzheimer’s sample scores higher than a random control: 1.0 is perfect, 0.5 is a coin flip.</p>
-</div>
-<table class="kv">
-  <tr><th>Accuracy at cutoff {{ "%.2f"|format(report.cutoff) }}</th><td>{{ c.correct }} of {{ c.total }} ({{ "%.0f"|format(c.accuracy * 100) }}%)</td></tr>
-  <tr><th>Alzheimer’s samples called Alzheimer’s-like (sensitivity)</th><td>{{ "%.0f"|format(c.sensitivity * 100) }}%</td></tr>
-  <tr><th>Control samples called control-like (specificity)</th><td>{{ "%.0f"|format(c.specificity * 100) }}%</td></tr>
-  <tr><th>Genes that moved in the expected direction</th><td>{{ c.genes_agree }} of {{ c.genes|length }}</td></tr>
-</table>
-<p class="small muted">With small groups these numbers are rough: in a batch of 20, one sample changes accuracy by 5 percentage points.</p>
+<div class="grid-2">
+  <section class="panel">
+    <span class="label">Does the panel separate your groups?</span>
+    <div class="verdict-num {{ 'good' if c.auc >= 0.7 else 'bad' if c.auc < 0.6 }}">AUC {{ "%.2f"|format(c.auc) }}</div>
+    <div class="meter"><i style="left: {{ c.auc * 100 }}%"></i></div>
+    <div class="meter-scale"><span>0 · reversed</span><span>0.5 · coin flip</span><span>1 · perfect</span></div>
+    <p style="margin-top:14px"><strong>{{ auc_words }}.</strong> AUC is the chance that a random Alzheimer’s sample scores higher than a random control. Your labels ({{ c.n_ctl }} control, {{ c.n_ad }} Alzheimer’s) were only used for this check, never for the scores.</p>
+    <table class="kv">
+      <tr><th>Accuracy at cutoff {{ "%.2f"|format(report.cutoff) }}</th><td>{{ c.correct }} / {{ c.total }} · {{ "%.0f"|format(c.accuracy * 100) }}%</td></tr>
+      <tr><th>Sensitivity (Alzheimer’s called Alzheimer’s-like)</th><td>{{ "%.0f"|format(c.sensitivity * 100) }}%</td></tr>
+      <tr><th>Specificity (controls called control-like)</th><td>{{ "%.0f"|format(c.specificity * 100) }}%</td></tr>
+      <tr><th>Genes in the expected direction</th><td>{{ c.genes_agree }} of {{ c.genes|length }}</td></tr>
+    </table>
+  </section>
 
-<details>
-  <summary>Direction of each gene in your data</summary>
-  <div class="table-scroll">
-  <table>
-    <tr><th>Gene</th><th>Panel expects</th><th>Your Alzheimer’s vs controls</th><th class="num">Difference (mean)</th><th>Agrees?</th></tr>
-    {% for g in c.genes %}
-    <tr>
-      <td class="mono">{{ g.gene }}</td>
-      <td>{{ g.expected }}</td>
-      <td>{{ g.observed }}</td>
-      <td class="num mono">{{ "%+.3f"|format(g.difference) }}</td>
-      <td class="{{ 'yes' if g.agrees else 'no' }}">{{ '✓ yes' if g.agrees else '✗ no' }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  </div>
-</details>
-{% endif %}
-
-<h2>Where the samples fall</h2>
-<div class="chart-box">
-  <svg class="chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="Panel scores of each sample on a number line, with the cutoff">
-    <rect x="{{ chart.left }}" y="{{ chart.top }}" width="{{ chart.cutoff_x - chart.left }}" height="{{ chart.axis_y - chart.top }}" class="zone-ctl"/>
-    <rect x="{{ chart.cutoff_x }}" y="{{ chart.top }}" width="{{ chart.right - chart.cutoff_x }}" height="{{ chart.axis_y - chart.top }}" class="zone-ad"/>
-    <text x="{{ chart.left + 6 }}" y="{{ chart.axis_y - 8 }}" class="zone-label">control-like</text>
-    <text x="{{ chart.right - 6 }}" y="{{ chart.axis_y - 8 }}" class="zone-label" text-anchor="end">Alzheimer’s-like</text>
-
-    {% for row in chart.rows %}
-      <text x="{{ chart.left + 6 }}" y="{{ row.y - 13 }}" class="row-label">{{ row.label }}</text>
-      {% for p in row.points %}
-        {% if row.kind == 'you' %}
-        <rect x="{{ p.x - 5 }}" y="{{ p.y - 5 }}" width="10" height="10" class="pt-you"><title>{{ p.label }}</title></rect>
-        {% else %}
-        <circle cx="{{ p.x }}" cy="{{ p.y }}" r="5.5" class="pt-{{ row.kind }}"><title>{{ p.label }}</title></circle>
-        {% endif %}
+  <section class="panel">
+    <span class="label">ROC curve</span>
+    <svg class="roc" viewBox="0 0 270 290" role="img" aria-label="ROC curve, AUC {{ '%.2f'|format(c.auc) }}">
+      <rect x="34" y="34" width="220" height="220" class="frame"/>
+      {% for f in [0.25, 0.5, 0.75] %}
+      <line x1="{{ 34 + f * 220 }}" x2="{{ 34 + f * 220 }}" y1="34" y2="254" class="grid"/>
+      <line x1="34" x2="254" y1="{{ 254 - f * 220 }}" y2="{{ 254 - f * 220 }}" class="grid"/>
       {% endfor %}
-    {% endfor %}
-
-    <line x1="{{ chart.cutoff_x }}" x2="{{ chart.cutoff_x }}" y1="{{ chart.top }}" y2="{{ chart.axis_y }}" class="cutoff-line"/>
-    <text x="{{ chart.cutoff_x }}" y="{{ chart.top - 6 }}" text-anchor="middle" class="cutoff-label">cutoff {{ "%.2f"|format(chart.cutoff) }}</text>
-
-    <line x1="{{ chart.left }}" x2="{{ chart.right }}" y1="{{ chart.axis_y }}" y2="{{ chart.axis_y }}" class="axis"/>
-    {% for t in chart.ticks %}
-    <line x1="{{ t.x }}" x2="{{ t.x }}" y1="{{ chart.axis_y }}" y2="{{ chart.axis_y + 4 }}" class="axis"/>
-    <text x="{{ t.x }}" y="{{ chart.axis_y + 18 }}" text-anchor="middle">{{ t.label }}</text>
-    {% endfor %}
-    <text x="{{ (chart.left + chart.right) / 2 }}" y="{{ chart.axis_y + 34 }}" text-anchor="middle">panel score</text>
-  </svg>
+      <line x1="34" y1="254" x2="254" y2="34" class="chance"/>
+      <polyline points="{{ c.roc }}" class="curve"/>
+      <text x="144" y="276" text-anchor="middle">controls wrongly flagged →</text>
+      <text x="18" y="144" text-anchor="middle" transform="rotate(-90 18 144)">Alzheimer’s caught →</text>
+      <text x="30" y="258" text-anchor="end">0</text><text x="30" y="40" text-anchor="end">1</text><text x="254" y="268" text-anchor="middle">1</text>
+    </svg>
+    <p class="small muted" style="margin:10px 0 0">The gold line is the panel; the dashed diagonal is guessing. A useful panel bends toward the top-left corner.</p>
+  </section>
 </div>
-<p class="small muted">Hover over a point to see the sample name and score.{% if report.check %} If the panel worked, the blue dots would sit left of the cutoff and the red ones right of it.{% endif %}</p>
-
-<h2>All samples</h2>
-{% set show_group = report.check or results|selectattr('group')|list %}
-<div class="table-scroll">
-<table id="resultsTable">
-  <thead>
-    <tr>
-      <th>Sample</th>
-      <th>Call</th>
-      <th class="num">Score</th>
-      {% if show_group %}<th>Your label</th>{% endif %}
-      <th>Genes</th>
-      <th>Notes</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for r in results|sort(attribute='score', reverse=True) %}
-    <tr>
-      <td class="mono">{{ r.name }}</td>
-      <td class="call {{ r.pattern_class }}">{{ r.pattern }}</td>
-      <td class="num mono">{{ "%.2f"|format((r.score|round(2)) + 0) }}</td>
-      {% if show_group %}<td>{{ r.group }}</td>{% endif %}
-      <td>{{ r.found }}/{{ report.panel_size }}</td>
-      <td class="small muted">{{ r.flags|join('; ') }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-</div>
-{% if report.skipped %}
-<p class="small muted">Skipped (fewer than {{ report.needed }} of {{ report.panel_size }} panel genes): {{ report.skipped|join(', ') }}</p>
 {% endif %}
 
-<h2>Gene by gene</h2>
-{% if results|length > 1 %}
-<p><label>Sample:
-  <select id="samplePicker">
-    {% for r in results %}<option value="{{ loop.index0 }}">{{ r.name }}{% if r.group %} ({{ r.group }}){% endif %}</option>{% endfor %}
-  </select></label>
-</p>
-{% endif %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>Where the samples fall</h2>
+    <div class="legend">
+      {% if reference %}<span><i class="l-ctl" style="opacity:.5"></i>GSE48350 controls</span><span><i class="l-ad" style="opacity:.5"></i>GSE48350 Alzheimer’s</span>{% endif %}
+      {% if report.check %}<span><i class="l-ctl"></i>labelled control</span><span><i class="l-ad"></i>labelled Alzheimer’s</span>{% else %}<span><i class="l-you"></i>your samples</span>{% endif %}
+      <span><i class="l-cut"></i>cutoff</span>
+    </div>
+  </div>
+  <div class="chart-box">
+    <svg class="chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="Panel score of each sample on a number line, with the cutoff">
+      <rect x="{{ chart.left }}" y="{{ chart.top }}" width="{{ chart.cutoff_x - chart.left }}" height="{{ chart.axis_y - chart.top }}" class="zone-ctl"/>
+      <rect x="{{ chart.cutoff_x }}" y="{{ chart.top }}" width="{{ chart.right - chart.cutoff_x }}" height="{{ chart.axis_y - chart.top }}" class="zone-ad"/>
+      <text x="{{ chart.left + 8 }}" y="{{ chart.axis_y - 9 }}" class="zone-label zl-ctl">control-like</text>
+      <text x="{{ chart.right - 8 }}" y="{{ chart.axis_y - 9 }}" class="zone-label zl-ad" text-anchor="end">Alzheimer’s-like</text>
+      {% for row in chart.rows %}
+        <text x="{{ chart.left + 8 }}" y="{{ row.y - 13 }}" class="row-label">{{ row.label }}</text>
+        {% for p in row.points %}
+          {% if row.kind == 'you' %}
+          <rect x="{{ p.x - 5 }}" y="{{ p.y - 5 }}" width="10" height="10" rx="1.5" class="pt-you"><title>{{ p.label }}</title></rect>
+          {% else %}
+          <circle cx="{{ p.x }}" cy="{{ p.y }}" r="6" class="pt-{{ row.kind }}"><title>{{ p.label }}</title></circle>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+      <line x1="{{ chart.cutoff_x }}" x2="{{ chart.cutoff_x }}" y1="{{ chart.top }}" y2="{{ chart.axis_y }}" class="cutoff-line"/>
+      <text x="{{ chart.cutoff_x }}" y="{{ chart.top - 7 }}" text-anchor="middle" class="cutoff-label">cutoff {{ "%.2f"|format(chart.cutoff) }}</text>
+      <line x1="{{ chart.left }}" x2="{{ chart.right }}" y1="{{ chart.axis_y }}" y2="{{ chart.axis_y }}" class="axis"/>
+      {% for t in chart.ticks %}
+      <line x1="{{ t.x }}" x2="{{ t.x }}" y1="{{ chart.axis_y }}" y2="{{ chart.axis_y + 5 }}" class="axis"/>
+      <text x="{{ t.x }}" y="{{ chart.axis_y + 19 }}" text-anchor="middle">{{ t.label }}</text>
+      {% endfor %}
+      <text x="{{ (chart.left + chart.right) / 2 }}" y="{{ chart.axis_y + 36 }}" text-anchor="middle">panel score</text>
+    </svg>
+  </div>
+  <p class="small muted" style="margin:8px 0 0">Hover a point for the sample name and score.{% if report.check %} If the panel worked, teal points would sit left of the cutoff and coral points to the right.{% endif %}</p>
+</section>
 
-{% for r in results %}
-<div class="breakdown {{ 'show' if loop.first }}" data-index="{{ loop.index0 }}">
-  <p><span class="mono">{{ r.name }}</span>: score {{ "%.2f"|format((r.score|round(2)) + 0) }}, <span class="call {{ r.pattern_class }}">{{ r.pattern }}</span></p>
-  <div class="bar-axis"><span class="ctl">← toward control</span><span class="ad">toward Alzheimer’s →</span></div>
-  {% for g in r.genes %}
-  <div class="bar-row">
-    <div class="bar-name">
-      <span class="mono">{{ g.gene }}</span>
-      <span class="small muted">value {{ "%.2f"|format((g.value|round(2)) + 0) }}, z {{ "%.2f"|format((g.z|round(2)) + 0) }}</span>
+<section class="panel">
+  <div class="panel-head">
+    <h2>Every sample, gene by gene</h2>
+    <p class="small muted">Cells show sign × z: <span class="t-ad">coral</span> pushes toward Alzheimer’s, <span class="t-ctl">teal</span> toward control.</p>
+  </div>
+  {% set show_group = report.check or results|selectattr('group')|list %}
+  <div class="table-scroll">
+    <table class="htable" id="resultsTable">
+      <thead>
+        <tr>
+          <th>Sample</th>
+          {% if show_group %}<th>Label</th>{% endif %}
+          <th>Call</th>
+          <th class="num">Score</th>
+          {% for g in results[0].genes %}<th class="gene-col">{{ g.gene }}</th>{% endfor %}
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results|sort(attribute='score', reverse=True) %}
+        <tr>
+          <td class="mono">{{ r.name }}</td>
+          {% if show_group %}<td class="tag">{{ r.group }}</td>{% endif %}
+          <td><span class="badge badge-{{ r.pattern_class }}">{{ r.pattern }}</span></td>
+          <td class="num mono"><strong>{{ "%.2f"|format((r.score|round(2)) + 0) }}</strong></td>
+          {% for g in r.genes %}<td class="hc" style="{{ g.contribution|heat }}">{{ "%.1f"|format((g.contribution|round(1)) + 0) }}</td>{% endfor %}
+          <td class="small muted">{{ r.flags|join('; ') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if report.skipped %}
+  <p class="small muted" style="margin:10px 0 0">Skipped (fewer than {{ report.needed }} of {{ report.panel_size }} panel genes): {{ report.skipped|join(', ') }}</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>One sample in detail</h2>
+    {% if results|length > 1 %}
+    <label class="small">Sample&nbsp;
+      <select id="samplePicker">
+        {% for r in results %}<option value="{{ loop.index0 }}">{{ r.name }}{% if r.group %} · {{ r.group }}{% endif %}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+  </div>
+  {% for r in results %}
+  <div class="breakdown {{ 'show' if loop.first }}" data-index="{{ loop.index0 }}">
+    <p><span class="mono">{{ r.name }}</span> · score <strong>{{ "%.2f"|format((r.score|round(2)) + 0) }}</strong> · <span class="badge badge-{{ r.pattern_class }}">{{ r.pattern }}</span></p>
+    <div class="bar-axis"><span class="t-ctl">← toward control</span><span class="t-ad">toward Alzheimer’s →</span></div>
+    {% for g in r.genes %}
+    <div class="bar-row">
+      <div class="bar-name">
+        <span class="mono">{{ g.gene }}</span>
+        <span class="small">value {{ "%.2f"|format((g.value|round(2)) + 0) }} · z {{ "%.2f"|format((g.z|round(2)) + 0) }} · {{ 'higher' if g.sign > 0 else 'lower' }} in AD</span>
+      </div>
+      <div class="track">
+        <span class="mid"></span>
+        {% if g.contribution >= 0 %}
+        <span class="bar b-ad" style="left:50%;width:{{ g.bar_width / 2 }}%"></span>
+        {% else %}
+        <span class="bar b-ctl" style="right:50%;width:{{ g.bar_width / 2 }}%"></span>
+        {% endif %}
+      </div>
+      <div class="bar-num mono {{ 't-ad' if g.contribution >= 0 else 't-ctl' }}">{{ "%+.2f"|format((g.contribution|round(2)) + 0) }}</div>
     </div>
-    <div class="track">
-      <span class="mid"></span>
-      {% if g.contribution >= 0 %}
-      <span class="bar ad" style="left:50%;width:{{ g.bar_width / 2 }}%"></span>
-      {% else %}
-      <span class="bar ctl" style="right:50%;width:{{ g.bar_width / 2 }}%"></span>
-      {% endif %}
-    </div>
-    <div class="bar-num mono {{ 'ad' if g.contribution >= 0 else 'ctl' }}">{{ "%+.2f"|format((g.contribution|round(2)) + 0) }}</div>
+    {% endfor %}
   </div>
   {% endfor %}
-</div>
-{% endfor %}
-<p class="small muted">Each bar is sign × z, where z says how far the gene is from {{ 'the batch average' if report.mode == 'batch' else 'the GSE48350 controls' }} in standard deviations. The score is the average of the bars.</p>
+  <p class="small muted" style="margin:12px 0 0">z = how many standard deviations the gene is from {{ 'the batch average' if report.mode == 'batch' else 'the GSE48350 controls' }}. Each bar is sign × z, and the score is the average of the bars.</p>
+</section>
 {% endblock %}

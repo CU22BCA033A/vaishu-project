@@ -61,7 +61,7 @@ The genes were chosen on GSE48350, so accuracy measured on GSE48350 is too optim
 
 How the test was done is in [`validation/validate_gse5281.py`](validation/validate_gse5281.py) (plain Python, standard library only) and on the Validation page of the site. LINC03007 and LINC02987 have newer names than the chip annotation, so they were matched by NCBI Gene ID: 646588 → probe `236977_at`, 101927151 → probe `1569478_s_at`.
 
-![Validation page](docs/validation.png)
+![Validation page (dark mode)](docs/validation.png)
 
 ## Project structure
 
@@ -90,6 +90,14 @@ vaishu-project/
 ```
 
 `analysis.py` does not import Flask, so the science can be tested on its own.
+
+## Design
+
+- Light and dark mode (follows the computer's setting; the Light / Dark switch in the header remembers your choice).
+- Colours carry meaning everywhere: **coral** = toward Alzheimer's, **teal** = toward control, **amber** = cutoff and highlights.
+- All charts (heatmaps, ROC curve, score strip, gene bars) are drawn from the real numbers with plain SVG and CSS, with no chart library.
+- Fonts: Fraunces (headings), IBM Plex Sans and IBM Plex Mono (text and numbers), from Google Fonts.
+- Works on phones: the layout switches to one column below 720 px.
 
 ## Input file layouts
 

@@ -25,6 +25,9 @@ app = Flask(__name__)
 # Whole-genome expression files can be big, so allow uploads up to 50 MB.
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
+# Lets the HTML templates write {{ value|heat }} to colour a heatmap cell
+app.jinja_env.filters["heat"] = analysis.heat_style
+
 REFERENCE_CUTOFF_TEXT = "95th percentile of the 18 GSE48350 control scores (measured on the same data the panel was chosen from)"
 BATCH_CUTOFF_TEXT = "0 = the average of your batch"
 
@@ -54,6 +57,7 @@ def show_form(error=None, form=None):
         default_cutoff=analysis.DEFAULT_CUTOFF,
         min_batch=analysis.MIN_BATCH_SIZE,
         validation=analysis.load_validation(),
+        heatmap=analysis.hero_heatmap(),
     )
 
 
@@ -149,7 +153,8 @@ def example_gse5281():
 
 @app.route("/validation")
 def validation():
-    return render_template("validation.html", v=analysis.load_validation())
+    return render_template("validation.html", v=analysis.load_validation(),
+                           roc=analysis.validation_roc())
 
 
 @app.route("/about")

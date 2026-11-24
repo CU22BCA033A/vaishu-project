@@ -1,18 +1,46 @@
 // main.js - a few small extras. Every page also works without JavaScript.
 
 
-// 1. Dark / light theme button (the choice is remembered in the browser)
-var themeBtn = document.getElementById("themeBtn");
-if (themeBtn) {
-  themeBtn.addEventListener("click", function () {
-    var now = document.documentElement.getAttribute("data-theme");
-    if (!now) {
-      now = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    var next = (now === "dark") ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    try { localStorage.setItem("theme", next); } catch (e) {}
+// 1. Light / Dark switch in the header (the choice is remembered in the browser)
+function currentTheme() {
+  var chosen = document.documentElement.getAttribute("data-theme");
+  if (chosen) return chosen;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+function markThemeButtons() {
+  var buttons = document.querySelectorAll("[data-theme-choice]");
+  for (var i = 0; i < buttons.length; i++) {
+    var on = buttons[i].getAttribute("data-theme-choice") === currentTheme();
+    buttons[i].setAttribute("aria-pressed", on ? "true" : "false");
+  }
+}
+var themeButtons = document.querySelectorAll("[data-theme-choice]");
+for (var t = 0; t < themeButtons.length; t++) {
+  themeButtons[t].addEventListener("click", function () {
+    var theme = this.getAttribute("data-theme-choice");
+    document.documentElement.setAttribute("data-theme", theme);
+    try { localStorage.setItem("theme", theme); } catch (e) {}
+    markThemeButtons();
   });
+}
+markThemeButtons();
+
+
+// 1b. The drop zone: show the chosen file name, highlight while dragging
+var drop = document.getElementById("drop");
+if (drop) {
+  var fileInput = drop.querySelector("input[type='file']");
+  var nameLabel = drop.querySelector(".file-name");
+  fileInput.addEventListener("change", function () {
+    if (fileInput.files.length > 0) {
+      var file = fileInput.files[0];
+      nameLabel.textContent = file.name + " · " + Math.max(1, Math.round(file.size / 1024)) + " KB";
+      drop.classList.add("has-file");
+    }
+  });
+  drop.addEventListener("dragover", function () { drop.classList.add("over"); });
+  drop.addEventListener("dragleave", function () { drop.classList.remove("over"); });
+  drop.addEventListener("drop", function () { drop.classList.remove("over"); });
 }
 
 

@@ -1,52 +1,94 @@
 {% extends "base.html" %}
 {% block title %}Method{% endblock %}
 
+{% block hero %}
+<section class="page-head">
+  <div class="container">
+    <span class="label">Method</span>
+    <h1>From an expression table to one score</h1>
+    <p class="lead">The core calculation is a short Python function, <code>score_sample()</code> in <code>analysis.py</code>. Here is what it does, step by step.</p>
+  </div>
+</section>
+{% endblock %}
+
 {% block content %}
-<h1>How the score is calculated</h1>
-<p class="lead">The calculation lives in one short Python function, <code>score_sample()</code> in <code>analysis.py</code>. Here is what it does, step by step.</p>
+<div class="grid-side">
+  <section class="panel">
+    <div class="method-step">
+      <span class="big-no">1</span>
+      <div>
+        <h2>Pick out the panel genes</h2>
+        <p>An expression file can hold 20,000 genes. Only the 7 panel genes are kept. If a gene appears on several rows (several probes on the chip), the row with the highest average is used, which is the same rule used to build the panel.</p>
+      </div>
+    </div>
+    <div class="method-step">
+      <span class="big-no">2</span>
+      <div>
+        <h2>Compare each gene with a baseline</h2>
+        <p>A z-score says how many standard deviations a value is above or below a baseline.</p>
+        <div class="formula">z = (value − <b>baseline mean</b>) / <b>baseline SD</b></div>
+        <p><strong>GSE48350 controls</strong>: the mean and SD of 18 control brains, stored in <code>panel_reference.csv</code>. Use this only for data processed exactly like GSE48350.</p>
+        <p style="margin:0"><strong>Your own batch</strong>: the mean and SD of all uploaded samples (at least {{ min_batch }}). This cancels most lab and processing differences. A score then means “compared with the rest of this batch”, so the batch must contain both kinds of samples.</p>
+      </div>
+    </div>
+    <div class="method-step">
+      <span class="big-no">3</span>
+      <div>
+        <h2>Point every gene the same way</h2>
+        <p>Some panel genes go up in Alzheimer’s and some go down. Multiplying by the gene’s sign makes “toward Alzheimer’s” positive for all of them.</p>
+        <div class="formula">contribution = <b>sign</b> × z &nbsp;&nbsp;<span style="opacity:.7">// sign = +1 or −1</span></div>
+      </div>
+    </div>
+    <div class="method-step">
+      <span class="big-no">4</span>
+      <div>
+        <h2>Average, then compare with a cutoff</h2>
+        <div class="formula">score = average(<b>contributions</b>)</div>
+        <p style="margin:0">Above the cutoff means Alzheimer’s-like. The default is {{ default_cutoff }} with the GSE48350 controls (the 95th percentile of their scores) and 0 in batch mode (the batch average).</p>
+      </div>
+    </div>
+    <div class="method-step">
+      <span class="big-no">5</span>
+      <div>
+        <h2>Check against labels</h2>
+        <p style="margin:0">With a <code>group</code> column or row (at least 3 controls and 3 Alzheimer’s), the site reports AUC, accuracy, sensitivity, specificity and an ROC curve. Labels are only used for this check, never for the scores.</p>
+      </div>
+    </div>
+  </section>
 
-<h2>1. Pick out the panel genes</h2>
-<p>An expression file may have 20,000 genes. The site keeps only the 7 panel genes. If a gene appears on several rows (several probes on the chip), it keeps the row with the highest average, which was the same rule used to build the panel.</p>
+  <aside class="sticky">
+    <section class="panel">
+      <span class="label">The panel</span>
+      <table class="gene-table" style="margin-top:8px">
+        <tr><th>Gene</th><th>AD</th><th class="num">Mean</th><th class="num">SD</th></tr>
+        {% for p in panel %}
+        <tr>
+          <td class="mono">{{ p.gene }}</td>
+          <td><span class="dir {{ 'up' if p.sign > 0 else 'down' }}"></span></td>
+          <td class="num mono">{{ "%.2f"|format(p.mean) }}</td>
+          <td class="num mono">{{ "%.2f"|format(p.sd) }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      <p class="small muted" style="margin:10px 0 0">Mean and SD (log2) of the 18 GSE48350 controls. <a href="{{ url_for('static', filename='data/panel_reference.csv') }}" download>Download CSV</a></p>
+    </section>
 
-<h2>2. Compare each gene with a baseline</h2>
-<p>Each gene gets a z-score: how many standard deviations it is above or below a baseline.</p>
-<pre>z = (value − baseline_mean) / baseline_sd</pre>
-<p>There are two choices for the baseline:</p>
-<ul>
-  <li><strong>The GSE48350 controls.</strong> The mean and SD of 18 control brains, stored in <code>panel_reference.csv</code>. Use this only for data processed exactly like GSE48350. Data from another lab is usually on a different scale and gets meaningless scores.</li>
-  <li><strong>Your own batch.</strong> The mean and SD of all the samples you upload (at least {{ min_batch }}). This cancels out most lab and processing differences. The score then means “compared with the rest of this batch”, so the batch must contain both kinds of samples.</li>
-</ul>
+    <section class="panel" id="layouts">
+      <span class="label">File layouts</span>
+      <p class="small" style="margin:8px 0 6px"><strong>Genes as rows</strong>, optional <code>group</code> row:</p>
+<pre>gene,P1,P2
+group,control,AD
+ANKIB1,0.52,1.31</pre>
+      <p class="small" style="margin:0 0 6px"><strong>Samples as rows</strong>, optional <code>group</code> column:</p>
+<pre>sample,group,ANKIB1,RAE1
+P1,control,0.52,2.61</pre>
+      <p class="small muted" style="margin:0">Recognised groups: control / normal / healthy and Alzheimer / AD / case.</p>
+    </section>
 
-<h2>3. Point every gene the same way</h2>
-<p>Some panel genes are higher in Alzheimer’s and some lower. Multiplying by the gene’s sign (+1 or −1) makes “toward Alzheimer’s” positive for all of them.</p>
-<pre>contribution = sign × z</pre>
-
-<h2>4. Average and compare with a cutoff</h2>
-<pre>panel score = average of the contributions</pre>
-<p>A score above the cutoff is called “Alzheimer’s-like”. With the GSE48350 controls the default cutoff is {{ default_cutoff }}, the 95th percentile of the control scores. In batch mode it is 0, the batch average.</p>
-
-<h2>5. Check against labels (optional)</h2>
-<p>If you add a <code>group</code> column or row, the site measures how well the scores separate your groups (AUC, accuracy, sensitivity, specificity). The labels are only used for this check, never for the scores.</p>
-
-<h2>The panel</h2>
-<table>
-  <tr><th>Gene</th><th>In Alzheimer’s (GSE48350)</th><th class="num">Control mean (log2)</th><th class="num">Control SD</th></tr>
-  {% for p in panel %}
-  <tr>
-    <td class="mono">{{ p.gene }}</td>
-    <td class="{{ 'ad' if p.sign > 0 else 'ctl' }}">{{ 'higher' if p.sign > 0 else 'lower' }}</td>
-    <td class="num mono">{{ "%.3f"|format(p.mean) }}</td>
-    <td class="num mono">{{ "%.3f"|format(p.sd) }}</td>
-  </tr>
-  {% endfor %}
-</table>
-<p class="small muted">From the cleaned GSE48350 hippocampus data: 18 control and 19 Alzheimer’s post-mortem samples. <a href="{{ url_for('static', filename='data/panel_reference.csv') }}" download>panel_reference.csv</a></p>
-
-<h2>Limitations</h2>
-<ul>
-  <li>The panel was chosen on 37 samples and <a href="{{ url_for('validation') }}">did not replicate on GSE5281</a>.</li>
-  <li>In GSE48350, disease status and processing batch overlap.</li>
-  <li>It needs post-mortem brain tissue, so it cannot be used on a living person.</li>
-  <li>It is not a diagnosis. Alzheimer’s disease is diagnosed by doctors with clinical tests.</li>
-</ul>
+    <div class="callout callout-info" style="margin:0">
+      <span class="icon">i</span>
+      <p class="small">Limitations: chosen on 37 samples, batch overlap in GSE48350, <a href="{{ url_for('validation') }}">failed on GSE5281</a>, and it needs post-mortem tissue. Not a diagnosis.</p>
+    </div>
+  </aside>
+</div>
 {% endblock %}

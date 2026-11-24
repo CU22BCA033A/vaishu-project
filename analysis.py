@@ -585,6 +585,7 @@ def check_against_labels(results, panel, cutoff):
         "specificity": true_neg / n_ctl,
         "genes": genes,
         "genes_agree": len([g for g in genes if g["agrees"]]),
+        "roc": roc_svg(roc_curve(scores, labels)),
     }
 
 
@@ -709,3 +710,99 @@ def load_validation():
         return None
     with open(VALIDATION_SUMMARY) as f:
         return json.load(f)
+
+
+# ---------------------------------------------------------------------------
+# Helpers for the pictures on the website
+# ---------------------------------------------------------------------------
+
+def roc_curve(scores, labels):
+    """
+    Points of the ROC curve as (false positive rate, true positive rate).
+    We walk down the scores from highest to lowest; every step lowers the
+    cutoff a little, so more samples get called Alzheimer's-like.
+    """
+    pairs = sorted(zip(scores, labels), key=lambda pair: -pair[0])
+    positives = labels.count(1)
+    negatives = labels.count(0)
+    points = [(0.0, 0.0)]
+    true_pos = 0
+    false_pos = 0
+    i = 0
+    while i < len(pairs):
+        current = pairs[i][0]
+        # samples with exactly the same score move together
+        while i < len(pairs) and pairs[i][0] == current:
+            if pairs[i][1] == 1:
+                true_pos += 1
+            else:
+                false_pos += 1
+            i += 1
+        points.append((false_pos / negatives, true_pos / positives))
+    return points
+
+
+def roc_svg(points, size=220, pad=34):
+    """Turn ROC points into an SVG 'points' string for a <polyline>."""
+    coords = []
+    for fpr, tpr in points:
+        x = pad + fpr * size
+        y = pad + size - tpr * size
+        coords.append("%.1f,%.1f" % (x, y))
+    return " ".join(coords)
+
+
+def heat_style(value, limit=2.5):
+    """
+    Colour for one heatmap cell. Positive = toward Alzheimer's (coral),
+    negative = toward control (teal). Stronger values = stronger colour.
+    Returns a CSS style string.
+    """
+    strength = min(1.0, abs(value) / limit)
+    percent = round(strength * 85)
+    colour = "--ad" if value > 0 else "--ctl"
+    text = "#fff" if percent > 50 else "var(--ink)"
+    return "background: color-mix(in srgb, var(%s) %d%%, var(--cell)); color: %s;" % (colour, percent, text)
+
+
+def hero_heatmap():
+    """
+    Real data for the picture on the home page: the 7 panel genes across
+    the 23 GSE5281 samples (controls first, then Alzheimer's).
+    Each cell is sign * z, compared with the batch average.
+    Returns None if the validation file is missing.
+    """
+    if not os.path.exists(VALIDATION_BATCH):
+        return None
+    panel = parse_panel(default_panel_text())
+    samples = parse_expression(read_file_text(VALIDATION_BATCH), panel)
+    centers = batch_centers(panel, samples)
+
+    columns = []
+    for sample in samples:
+        result = score_sample(sample, panel, centers)
+        columns.append({
+            "name": sample["name"],
+            "label": group_label(sample["group"]),
+            "cells": [g["contribution"] for g in result["genes"]],
+        })
+    columns.sort(key=lambda c: c["label"])
+    return {
+        "genes": [p["gene"] for p in panel],
+        "columns": columns,
+        "n_ctl": len([c for c in columns if c["label"] == 0]),
+    }
+
+
+def validation_roc():
+    """ROC curve of the GSE5281 validation, read from its scores file."""
+    path = os.path.join(VALIDATION_FOLDER, "gse5281_scores.csv")
+    if not os.path.exists(path):
+        return None
+    scores = []
+    labels = []
+    with open(path) as f:
+        for row in csv.DictReader(f):
+            scores.append(float(row["panel_score"]))
+            labels.append(group_label(row["group"]))
+    return roc_svg(roc_curve(scores, labels))

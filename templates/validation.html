@@ -1,77 +1,126 @@
 {% extends "base.html" %}
 {% block title %}Validation{% endblock %}
 
-{% block content %}
-<h1>Does the panel work on new data?</h1>
+{% block hero %}
+<section class="page-head">
+  <div class="container">
+    <span class="label">Validation · GSE5281</span>
+    <h1>Does the panel work on new data?</h1>
+    <p class="lead">The 7 genes were chosen using GSE48350. Accuracy measured on those same samples is too optimistic, because the genes were picked to fit them. So the panel was tested on a dataset it had never seen: <strong>GSE5281</strong>, from a different study and lab.</p>
+  </div>
+</section>
+{% endblock %}
 
+{% block content %}
 {% if not v %}
-<div class="note"><p>The validation has not been run yet. Run <code>python validation/validate_gse5281.py</code> and reload this page.</p></div>
+<div class="callout callout-info"><span class="icon">i</span><p>The validation has not been run yet. Run <code>python validation/validate_gse5281.py</code> and reload this page.</p></div>
 {% else %}
 
-<p class="lead">The 7 genes were chosen using GSE48350. Measuring accuracy on those same samples is too optimistic, because the genes were picked to fit them. So we tested the panel on a dataset it had never seen: <strong>GSE5281</strong>, from a different study and lab.</p>
+<div class="grid-2">
+  <section class="panel">
+    <span class="label">Result</span>
+    <div class="verdict-num bad">AUC {{ "%.2f"|format(v.auc) }}</div>
+    <div class="meter"><i style="left: {{ v.auc * 100 }}%"></i></div>
+    <div class="meter-scale"><span>0 · reversed</span><span>0.5 · coin flip</span><span>1 · perfect</span></div>
+    <p style="margin-top:14px"><strong>The panel did not hold up.</strong> On {{ v.n_control }} control and {{ v.n_alzheimers }} Alzheimer’s hippocampus samples it did no better than chance. Alzheimer’s samples actually tended to score <em>lower</em> than controls, and only {{ v.genes_in_expected_direction }} of 7 genes moved in the expected direction.</p>
+    <table class="kv">
+      <tr><th>95% bootstrap interval for AUC</th><td>{{ "%.2f"|format(v.auc_ci95[0]) }} – {{ "%.2f"|format(v.auc_ci95[1]) }}</td></tr>
+      <tr><th>Permutation test (10,000 shuffles)</th><td>p = {{ "%.2f"|format(v.permutation_p) }}</td></tr>
+      <tr><th>Accuracy, rule fixed in advance (score &gt; 0)</th><td>{{ v.correct }} / {{ v.total }} · {{ "%.0f"|format(v.accuracy * 100) }}%</td></tr>
+      <tr><th>Sensitivity · specificity</th><td>{{ "%.0f"|format(v.sensitivity * 100) }}% · {{ "%.0f"|format(v.specificity * 100) }}%</td></tr>
+    </table>
+    <p style="margin:16px 0 0"><a class="btn btn-line" href="{{ url_for('example_gse5281') }}">Open these 23 samples in the analyzer</a></p>
+  </section>
 
-<div class="verdict">
-  <div class="big-number">AUC {{ "%.2f"|format(v.auc) }}</div>
-  <p><strong>The panel did not hold up.</strong> On {{ v.n_control }} control and {{ v.n_alzheimers }} Alzheimer’s hippocampus samples it did no better than chance. Alzheimer’s samples actually tended to score <em>lower</em> than controls. Only {{ v.genes_in_expected_direction }} of 7 genes moved in the expected direction.</p>
+  <section class="panel">
+    <span class="label">ROC curve</span>
+    {% if roc %}
+    <svg class="roc" viewBox="0 0 270 290" role="img" aria-label="ROC curve of the panel on GSE5281">
+      <rect x="34" y="34" width="220" height="220" class="frame"/>
+      {% for f in [0.25, 0.5, 0.75] %}
+      <line x1="{{ 34 + f * 220 }}" x2="{{ 34 + f * 220 }}" y1="34" y2="254" class="grid"/>
+      <line x1="34" x2="254" y1="{{ 254 - f * 220 }}" y2="{{ 254 - f * 220 }}" class="grid"/>
+      {% endfor %}
+      <line x1="34" y1="254" x2="254" y2="34" class="chance"/>
+      <polyline points="{{ roc }}" class="curve"/>
+      <text x="144" y="276" text-anchor="middle">controls wrongly flagged →</text>
+      <text x="18" y="144" text-anchor="middle" transform="rotate(-90 18 144)">Alzheimer’s caught →</text>
+      <text x="30" y="258" text-anchor="end">0</text><text x="30" y="40" text-anchor="end">1</text><text x="254" y="268" text-anchor="middle">1</text>
+    </svg>
+    {% endif %}
+    <p class="small muted" style="margin:10px 0 0">A useful panel bends toward the top-left corner. Here the gold line runs <em>below</em> the dashed “guessing” diagonal.</p>
+    <p class="small" style="margin:14px 0 0"><span class="label" style="display:inline">Dataset</span><br>{{ v.tissue }}<br>{{ v.platform }}</p>
+  </section>
 </div>
 
-<p><a class="btn plain" href="{{ url_for('example_gse5281') }}">Open these 23 samples in the analyzer</a></p>
+<section class="panel">
+  <div class="panel-head">
+    <h2>Gene by gene</h2>
+    <p class="small muted">Difference = mean log2 in Alzheimer’s minus mean in controls</p>
+  </div>
+  <div class="table-scroll">
+  <table class="gene-table">
+    <tr><th>Gene</th><th>Probe</th><th>Expected in AD</th><th>Seen in GSE5281</th><th>Difference</th><th class="num">AD − control</th><th class="num">Gene AUC</th></tr>
+    {% for g in v.genes %}
+    {% set d = g.ad_minus_control_log2 %}
+    <tr>
+      <td class="mono"><strong>{{ g.gene }}</strong></td>
+      <td class="mono small muted">{{ g.probe }}</td>
+      <td><span class="dir {{ 'up' if g.expected == 'higher' else 'down' }}">{{ g.expected }}</span></td>
+      <td class="{{ 'ok' if g.agrees else 'notok' }}">{{ g.observed }} {{ '✓' if g.agrees else '✗' }}</td>
+      <td>
+        <div class="diff"><span class="mid"></span>
+          {% set w = [50, (d|abs) * 50]|min %}
+          {% if d >= 0 %}<i style="left:50%;width:{{ w }}%;background:var(--ad)"></i>{% else %}<i style="right:50%;width:{{ w }}%;background:var(--ctl)"></i>{% endif %}
+        </div>
+      </td>
+      <td class="num mono">{{ "%+.3f"|format(d) }}</td>
+      <td class="num mono">{{ "%.2f"|format(g.auc_in_expected_direction) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  <p class="small muted" style="margin:10px 0 0">Gene AUC: how well that gene alone separates the groups in the expected direction (0.5 = chance). Bars are scaled so ±1 log2 fills one side.</p>
+</section>
 
-<h2>Numbers</h2>
-<table class="kv">
-  <tr><th>Samples</th><td>{{ v.n_control }} control, {{ v.n_alzheimers }} Alzheimer’s (hippocampus)</td></tr>
-  <tr><th>AUC</th><td>{{ "%.2f"|format(v.auc) }} (95% bootstrap interval {{ "%.2f"|format(v.auc_ci95[0]) }}–{{ "%.2f"|format(v.auc_ci95[1]) }})</td></tr>
-  <tr><th>Permutation test</th><td>p = {{ "%.2f"|format(v.permutation_p) }}. Random labels did at least as well {{ "%.0f"|format(v.permutation_p * 100) }}% of the time</td></tr>
-  <tr><th>Accuracy (score &gt; 0)</th><td>{{ v.correct }} of {{ v.total }} ({{ "%.0f"|format(v.accuracy * 100) }}%)</td></tr>
-  <tr><th>Sensitivity / specificity</th><td>{{ "%.0f"|format(v.sensitivity * 100) }}% / {{ "%.0f"|format(v.specificity * 100) }}%</td></tr>
-</table>
+<section class="panel">
+  <div class="panel-head"><h2>Does the probe choice matter?</h2></div>
+  <p>Most genes have several probes on the chip. The main result uses the rule fixed in advance: the highest-expressed probe. Other reasonable choices:</p>
+  <table class="kv" style="max-width:520px">
+    {% for rule, value in v.probe_choice_check_auc.items() %}
+    <tr><th>{{ rule|capitalize }}</th><td>AUC {{ "%.2f"|format(value) }}</td></tr>
+    {% endfor %}
+  </table>
+  <p style="margin:14px 0 0">None of them separates the groups, so the conclusion does not depend on this choice.</p>
+</section>
 
-<h3>Each gene</h3>
-<div class="table-scroll">
-<table>
-  <tr><th>Gene</th><th>Probe</th><th>Expected in AD</th><th>Seen in GSE5281</th><th class="num">AD − control (log2)</th><th class="num">Gene AUC</th></tr>
-  {% for g in v.genes %}
-  <tr>
-    <td class="mono">{{ g.gene }}</td>
-    <td class="mono small">{{ g.probe }}</td>
-    <td>{{ g.expected }}</td>
-    <td class="{{ 'yes' if g.agrees else 'no' }}">{{ g.observed }} {{ '✓' if g.agrees else '✗' }}</td>
-    <td class="num mono">{{ "%+.3f"|format(g.ad_minus_control_log2) }}</td>
-    <td class="num mono">{{ "%.2f"|format(g.auc_in_expected_direction) }}</td>
-  </tr>
-  {% endfor %}
-</table>
+<div class="grid-2">
+  <section class="panel">
+    <h2>How the test was done</h2>
+    <ol class="timeline">
+      <li>Downloaded the GSE5281 series matrix from NCBI GEO and kept the hippocampus samples.</li>
+      <li>Found each gene’s probes on the Affymetrix HG-U133 Plus 2.0 chip. LINC03007 and LINC02987 have newer names than the chip annotation, so they were matched by NCBI Gene ID (646588 and 101927151).</li>
+      <li>Converted the MAS5 values to log2 and standardised each gene within the dataset. The GSE48350 means could not be reused, because this data is on a different scale.</li>
+      <li>Scored every sample <em>without</em> looking at the labels, then compared scores with labels.</li>
+      <li>Changed nothing about the panel after seeing the results.</li>
+    </ol>
+    <p class="small muted" style="margin:0">Script: <code>validation/validate_gse5281.py</code>, plain Python with no extra packages. It runs in about a second after the 36 MB download.</p>
+  </section>
+
+  <section class="panel">
+    <h2>What could explain it</h2>
+    <div class="reasons" style="grid-template-columns:1fr">
+      <div class="reason"><h3>Overfitting</h3><p>The genes were picked from about 20,000 using only 37 samples. With that many candidates, some will separate a small dataset by chance.</p></div>
+      <div class="reason"><h3>Batch effects</h3><p>In GSE48350, disease status and processing batch overlap, so some “Alzheimer’s” genes may really be batch genes.</p></div>
+      <div class="reason"><h3>Different material</h3><p>GSE5281 used laser-captured CA1 neurons, while GSE48350 used whole tissue. This makes the test harder, but a robust marker should still point the same way.</p></div>
+      <div class="reason"><h3>Small test set</h3><p>23 samples gives a wide interval, but even its upper end ({{ "%.2f"|format(v.auc_ci95[1]) }}) is close to chance.</p></div>
+    </div>
+  </section>
 </div>
-<p class="small muted">Gene AUC: how well that single gene separates the groups in the expected direction (0.5 = chance).</p>
 
-<h3>Does the probe choice matter?</h3>
-<p>Most genes have several probes on the chip. The main result uses the rule fixed in advance (highest-expressed probe). Other choices give:</p>
-<table>
-  {% for rule, value in v.probe_choice_check_auc.items() %}
-  <tr><td>{{ rule }}</td><td class="num mono">AUC {{ "%.2f"|format(value) }}</td></tr>
-  {% endfor %}
-</table>
-<p>None of them separates the groups, so the conclusion does not depend on this choice.</p>
-
-<h2>How the test was done</h2>
-<ol class="steps">
-  <li>Downloaded the GSE5281 series matrix from NCBI GEO and kept the hippocampus samples.</li>
-  <li>Found the probes for each gene on the Affymetrix HG-U133 Plus 2.0 chip. LINC03007 and LINC02987 have newer names than the chip annotation, so they were matched by NCBI Gene ID (646588 and 101927151).</li>
-  <li>Turned the MAS5 values into log2 and standardised each gene within the dataset. The GSE48350 means could not be reused because the data is on a different scale.</li>
-  <li>Computed the panel score for every sample <em>without</em> looking at the labels, then compared scores and labels.</li>
-  <li>Nothing about the panel (genes, directions, scoring) was changed after seeing the results.</li>
-</ol>
-<p>The script is <code>validation/validate_gse5281.py</code> in the repository and runs in about a second after the 36 MB download.</p>
-
-<h2>What could explain it</h2>
-<ul>
-  <li><strong>Overfitting.</strong> The panel was chosen from about 20,000 genes using only 37 samples. With that many genes, some will separate a small dataset by chance.</li>
-  <li><strong>Batch effects.</strong> In GSE48350, disease status and processing batch overlap, so some “Alzheimer’s” genes may really be batch genes.</li>
-  <li><strong>Different material.</strong> GSE5281 used laser-captured CA1 neurons, while GSE48350 used whole hippocampus tissue. Genes from glia or other cells may behave differently. This makes the test harder, but a robust marker should still show the same direction.</li>
-  <li><strong>Small test set.</strong> 23 samples gives a wide interval (see above), but even the top of that interval is close to chance.</li>
-</ul>
-
-<h2>What this means for the project</h2>
-<p>The website still works as a teaching tool: it shows how a gene panel score is built, and how to check a panel honestly. A next step would be to choose genes on several datasets together and test on another one, such as whole-tissue hippocampus data from a third study.</p>
+<div class="callout callout-info">
+  <span class="icon">i</span>
+  <div><p><strong>What this means.</strong> The site still works as a teaching tool: it shows how a gene-panel score is built and how to test one honestly. A stronger panel would need genes chosen on several datasets together, then tested on yet another one.</p></div>
+</div>
 {% endif %}
 {% endblock %}
